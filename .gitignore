@@ -5,7 +5,7 @@ firebase_config.json
 .env
 
 # ESP32 hassas ayarlar
-esp32/config.h
+esp32/main/config.h
 
 # Python
 ml/__pycache__/
