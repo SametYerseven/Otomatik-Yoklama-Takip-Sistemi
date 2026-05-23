@@ -1,0 +1,277 @@
+/* ==========================================================================
+   1. GLOBAL AYARLAR & RENK DEĞİŞKENLERİ
+   ========================================================================== */
+:root {
+    --bg-main: #f4f6f9;          
+    --bg-card: #ffffff;          
+    --text-primary: #2d3748;     
+    --text-muted: #718096;       
+    --color-primary: #3182ce;    
+    --color-primary-hover: #2b6cb0;
+    --color-success: #38a169;    
+    --color-danger: #e53e3e;     
+    --border-color: #e2e8f0;     
+    --font-sans: 'Inter', sans-serif;
+    --navbar-bg: #1a202c;
+}
+
+/* KARANLIK TEMA RENK DEĞİŞKENLERİ */
+body.dark-mode {
+    --bg-main: #0f172a;          
+    --bg-card: #1e293b;          
+    --text-primary: #f8fafc;     
+    --text-muted: #94a3b8;       
+    --border-color: #334155;     
+    --navbar-bg: #0f172a;
+}
+
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+body {
+    font-family: var(--font-sans);
+    background-color: var(--bg-main);
+    color: var(--text-primary);
+    line-height: 1.5;
+    transition: background-color 0.3s, color 0.3s;
+}
+
+.hidden {
+    display: none !important;
+}
+
+/* Bileşen Stilleri */
+.btn-block {
+    display: block;
+    width: 100%;
+    background-color: var(--color-primary);
+    color: white;
+    border: none;
+    padding: 12px;
+    border-radius: 6px;
+    font-weight: 600;
+    font-size: 11pt;
+    cursor: pointer;
+    transition: background 0.2s ease;
+}
+
+.btn-block:hover { background-color: var(--color-primary-hover); }
+.btn-block.success { background-color: var(--color-success); }
+.btn-block.success:hover { background-color: #2f855a; }
+
+.form-group {
+    margin-bottom: 18px;
+    text-align: left;
+}
+
+.form-group label {
+    display: block;
+    font-size: 9.5pt;
+    font-weight: 600;
+    margin-bottom: 6px;
+    color: var(--text-primary);
+}
+
+.form-group input, .form-group select {
+    width: 100%;
+    padding: 10px 14px;
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    font-family: var(--font-sans);
+    font-size: 10pt;
+    background-color: #f8fafc;
+    color: var(--text-primary);
+}
+
+body.dark-mode .form-group input, body.dark-mode .form-group select {
+    background-color: #1e293b;
+}
+
+/* ==========================================================================
+   2. EKRAN 1: GİRİŞ PANELİ
+   ========================================================================== */
+.auth-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    background: linear-gradient(135deg, #1a202c, #2d3748);
+    padding: 20px;
+}
+
+.login-card {
+    background-color: var(--bg-card);
+    padding: 40px;
+    border-radius: 12px;
+    width: 100%;
+    max-width: 400px;
+    box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+    text-align: center;
+}
+
+body.dark-mode .login-card {
+    border: 1px solid var(--border-color);
+}
+
+.login-header { margin-bottom: 30px; }
+.login-logo { font-size: 36pt; color: var(--color-primary); margin-bottom: 15px; }
+.login-card h2 { font-size: 16pt; font-weight: 700; }
+.login-card p { font-size: 9.5pt; color: var(--text-muted); margin-top: 5px; }
+
+/* ==========================================================================
+   3. NAVBAR & TEMA BUTONU
+   ========================================================================== */
+.navbar {
+    background-color: var(--navbar-bg) !important;
+    color: #ffffff;
+    padding: 15px 30px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.navbar .logo { display: flex; align-items: center; gap: 10px; font-size: 13pt; font-weight: 700; }
+.navbar .logo i { color: var(--color-primary); }
+.navbar-actions { display: flex; align-items: center; gap: 20px; }
+
+.btn-theme {
+    background: rgba(255, 255, 255, 0.1);
+    border: none;
+    color: #ffffff;
+    width: 38px;
+    height: 38px;
+    border-radius: 50%;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12pt;
+    transition: background 0.2s, transform 0.2s;
+}
+
+.btn-theme:hover { background: rgba(255, 255, 255, 0.2); transform: scale(1.05); }
+body.dark-mode .btn-theme { color: #f59e0b; }
+.user-profile { font-size: 10pt; font-weight: 500; color: white; }
+
+.system-status {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 9pt;
+    background: rgba(255,255,255,0.1);
+    padding: 6px 12px;
+    border-radius: 20px;
+    color: white;
+}
+
+.status-dot.online {
+    width: 8px;
+    height: 8px;
+    background-color: var(--color-success);
+    border-radius: 50%;
+    box-shadow: 0 0 8px var(--color-success);
+}
+
+/* ==========================================================================
+   4. EKRAN 2: DERS SEÇİMİ
+   ========================================================================== */
+.select-container { max-width: 600px; margin: 50px auto; padding: 0 20px; }
+.welcome-box { text-align: center; margin-bottom: 30px; }
+.welcome-box h2 { font-size: 18pt; font-weight: 700; }
+.welcome-box .highlight { color: var(--color-primary); }
+.welcome-box p { color: var(--text-muted); font-size: 10pt; margin-top: 5px; }
+
+.config-card {
+    background-color: var(--bg-card);
+    padding: 30px;
+    border-radius: 10px;
+    border: 1px solid var(--border-color);
+    box-shadow: 0 4px 6px rgba(0,0,0,0.02);
+}
+
+.config-card h3 { font-size: 12pt; margin-bottom: 20px; border-bottom: 1px solid var(--border-color); padding-bottom: 10px; }
+
+/* ==========================================================================
+   5. EKRAN 3: YOKLAMA DASHBOARD & TABLO
+   ========================================================================== */
+.dashboard-container { max-width: 1200px; margin: 30px auto; padding: 0 20px; display: flex; flex-direction: column; gap: 25px; }
+
+.course-info-section {
+    background: linear-gradient(135deg, #2b6cb0, #1a365d);
+    color: white;
+    border-radius: 12px;
+    padding: 25px;
+    box-shadow: 0 4px 10px rgba(43, 108, 176, 0.15);
+}
+
+.course-card { display: flex; justify-content: space-between; align-items: center; }
+.course-code { background: rgba(255, 255, 255, 0.2); padding: 4px 8px; border-radius: 4px; font-size: 8.5pt; font-weight: 700; }
+.course-card h1 { font-size: 16pt; margin: 5px 0; font-weight: 600; }
+.instructor-name { font-size: 9.5pt; opacity: 0.85; }
+.session-badge { display: flex; align-items: center; gap: 12px; background: rgba(255,255,255,0.15); padding: 10px 18px; border-radius: 8px; }
+.session-badge i { font-size: 18pt; }
+.session-title { display: block; font-size: 7.5pt; text-transform: uppercase; opacity: 0.7; }
+.session-value { font-weight: 600; font-size: 10.5pt; }
+
+/* İstatistik Kartları */
+.section-title { font-size: 12pt; font-weight: 600; margin-bottom: 15px; }
+.dashboard-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
+.stat-card { background-color: var(--bg-card); padding: 20px; border-radius: 10px; border: 1px solid var(--border-color); display: flex; align-items: center; }
+.stat-icon { width: 45px; height: 45px; border-radius: 50%; text-align: center; line-height: 45px; font-size: 14pt; margin-right: 15px; }
+.stat-info h3 { font-size: 8.5pt; color: var(--text-muted); text-transform: uppercase; font-weight: 500; }
+.stat-info p { font-size: 18pt; font-weight: 700; }
+
+.stat-card.total .stat-icon { background-color: #ebf8ff; color: #2b6cb0; }
+.stat-card.present .stat-icon { background-color: #f0fff4; color: #2f855a; }
+.stat-card.absent .stat-icon { background-color: #fff5f5; color: #c53030; }
+
+/* Tablo */
+.table-section { background-color: var(--bg-card); border-radius: 10px; border: 1px solid var(--border-color); padding: 20px; }
+.table-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; border-bottom: 1px solid var(--border-color); padding-bottom: 15px; }
+.table-title h2 { font-size: 13pt; font-weight: 600; }
+.table-title p { font-size: 9pt; color: var(--text-muted); }
+
+.btn-excel {
+    background-color: #2f855a;
+    color: white;
+    border: none;
+    padding: 9px 15px;
+    border-radius: 6px;
+    font-family: var(--font-sans);
+    font-weight: 600;
+    font-size: 9.5pt;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+.btn-excel:hover { background-color: #22543d; }
+
+.table-responsive { width: 100%; overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; font-size: 10pt; }
+th { background-color: #f7fafc; color: var(--text-muted); font-weight: 600; padding: 12px 16px; border-bottom: 2px solid var(--border-color); font-size: 8pt; text-transform: uppercase; }
+body.dark-mode th { background-color: #1e293b; }
+td { padding: 12px 16px; border-bottom: 1px solid var(--border-color); }
+tr:hover td { background-color: #f8fafc; }
+body.dark-mode tr:hover td { background-color: #334155; }
+.table-empty { text-align: center; color: var(--text-muted); padding: 30px 0 !important; }
+
+/* Badges (Rozetler) */
+.badge { display: inline-block; padding: 4px 8px; border-radius: 4px; font-size: 8pt; font-weight: 600; }
+.badge-success-light { background-color: #e6fffa; color: #234e52; border: 1px solid #b2f5ea; }
+.badge-danger-light { background-color: #fff5f5; color: #742a2a; border: 1px solid #fed7d7; }
+body.dark-mode .badge-success-light { background-color: rgba(56, 161, 105, 0.2); color: #63b3ed; border: none; }
+body.dark-mode .badge-danger-light { background-color: rgba(229, 62, 62, 0.2); color: #fc8181; border: none; }
+
+.badge-success { background-color: var(--color-success); color: white; }
+.badge-danger { background-color: var(--color-danger); color: white; }
+
+/* Responsive */
+@media (max-width: 768px) {
+    .dashboard-stats { grid-template-columns: 1fr; }
+    .course-card { flex-direction: column; align-items: flex-start; gap: 15px; }
+    .table-header { flex-direction: column; align-items: flex-start; gap: 15px; }
+    .btn-excel { width: 100%; text-align: center; }
+}
