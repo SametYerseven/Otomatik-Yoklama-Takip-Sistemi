@@ -1,18 +1,10 @@
-// ==========================================================================
-// 1. FIREBASE VERİTABANI YAPILANDIRMASI 
-// ==========================================================================
-const firebaseConfig = {
-  apiKey: "AIzaSyBRRM1RWRPZ29u9rLlTjQmbhuozlCMQTBk",
-  databaseURL: "https://otomatik-yoklama-takip-sistemi-default-rtdb.europe-west1.firebasedatabase.app/",
-  projectId: "277974868224"
-};
 
+// 1. FIREBASE VERİTABANI YAPILANDIRMASI 
 firebase.initializeApp(firebaseConfig);
 const db = firebase.database();
 
-// ==========================================================================
+
 // 2. DOM ELEMENTLERİNİN YAKALANMASI
-// ==========================================================================
 const screenLogin = document.getElementById('screen-login');
 const screenCourseSelect = document.getElementById('screen-course-select');
 const screenDashboard = document.getElementById('screen-dashboard');
@@ -32,9 +24,8 @@ const presentStudentsCard = document.getElementById('present-students');
 const absentStudentsCard = document.getElementById('absent-students');
 const btnExport = document.getElementById('btn-export');
 
-// ==========================================================================
+
 // 3. ÖĞRENCİ VERİ HAVUZU (MAC EŞLEŞTİRME VE DERS KAYDI KONTROLÜ)
-// ==========================================================================
 const ogrenciHavuzu = {
   "6c:a1:6e:b1:84:33": { no: "220101001", ad: "Ece Kılınç", kayit: "Var" },
   "7a:b2:5c:d3:94:11": { no: "220101002", ad: "Gülşen Altun", kayit: "Var" },
@@ -44,9 +35,8 @@ const ogrenciHavuzu = {
 
 const katilimTakip = {};
 
-// ==========================================================================
+
 // 4. EKRANLAR ARASI GEÇİŞ MANTIĞI (NAVIGATION)
-// ==========================================================================
 formLogin.addEventListener('submit', (e) => {
   e.preventDefault(); 
   screenLogin.classList.add('hidden');
@@ -73,9 +63,7 @@ btnStartAttendance.addEventListener('click', () => {
   window.dispatchEvent(new CustomEvent('fakeSimulationTrigger'));
 });
 
-// ==========================================================================
 // 5. GERÇEK ZAMANLI VERİ İŞLEME FONKSİYONU
-// ==========================================================================
 function renderAttendanceData(dersKodu, oturum) {
   const dbYolu = `Yoklamalar/${dersKodu}/${oturum}`;
   
@@ -158,9 +146,7 @@ function processSnapshot(snapshot) {
   absentStudentsCard.innerText = Math.max(0, toplamKayitliOgrenci - aktifSınıftaOlanlar);
 }
 
-// ==========================================================================
 // 6. EXCEL RAPORLAMA ÇIKTI FONKSİYONU
-// ==========================================================================
 btnExport.addEventListener('click', () => {
   const tablo = document.getElementById('attendance-table');
   const wb = XLSX.utils.table_to_book(tablo, { sheet: "Yoklama Raporu" });
@@ -168,9 +154,7 @@ btnExport.addEventListener('click', () => {
   XLSX.writeFile(wb, `yoklama_raporu_${tarih}.xlsx`);
 });
 
-// ==========================================================================
 // 7. DARK MODE (KARANLIK TEMA) KONTROLÜ
-// ==========================================================================
 const themeToggles = document.querySelectorAll('.theme-toggle');
 
 const currentTheme = localStorage.getItem('theme');
@@ -195,9 +179,7 @@ function updateThemeIcons(theme) {
   });
 }
 
-// ==========================================================================
 // 8. SİMÜLASYON TEST ARACI (VERİTABANI YOKKEN ÇALIŞTIRMAK İÇİN)
-// ==========================================================================
 window.addEventListener('fakeSimulationTrigger', () => {
   setInterval(() => {
     if (!screenDashboard.classList.contains('hidden')) {

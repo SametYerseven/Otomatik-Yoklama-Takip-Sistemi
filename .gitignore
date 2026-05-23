@@ -6,6 +6,7 @@ firebase_config.json
 
 # ESP32 hassas ayarlar
 esp32/main/config.h
+web/config.js
 
 # Python
 ml/__pycache__/
