@@ -1,77 +1,159 @@
+#include <WiFi.h>
+#include <Firebase_ESP_Client.h>
 #include <BLEDevice.h>
 #include <BLEUtils.h>
-#include <BLEServer.h>
-#include <BLEAdvertising.h>
+#include <BLEScan.h>
+#include <BLEAdvertisedDevice.h>
 #include "config.h"
+#include "addons/TokenHelper.h"
+#include "addons/RTDBHelper.h"
 
 
-#define BEACON_UUID  "87b99b2c-9069-4a45-b2a5-ec0f6b5c8d4a"
-#define TX_POWER     -59
+uint16_t aktifDersKodu = 0;
+uint8_t  aktifOturumNo = 0;
+int scanTime = 5; 
+BLEScan* pBLEScan;
 
+FirebaseData fbdo;
+FirebaseAuth auth;
+FirebaseConfig config_firebase;
 
-uint16_t aktifDersKodu  = 3114;
-uint8_t  aktifOturumNo  = 1;
+#define PIN_KIRMIZI 25
+#define PIN_YESIL 26
+#define PIN_MAVI 27
+#define PIN_BUZZER 13
 
-
-BLEAdvertising* pAdvertising;
-
-void iBeaconYayinGuncelle(uint16_t major, uint16_t minor) {
-    
-    pAdvertising->stop();
-
-    BLEUUID uuid(BEACON_UUID);
-    uint8_t* uuidBytes = uuid.getNative()->uuid.uuid128;
-
-    uint8_t beaconData[26] = {
-        0x4C, 0x00,  
-        0x02, 0x15,   
-
-        uuidBytes[15], uuidBytes[14], uuidBytes[13], uuidBytes[12],
-        uuidBytes[11], uuidBytes[10], uuidBytes[9],  uuidBytes[8],
-        uuidBytes[7],  uuidBytes[6],  uuidBytes[5],  uuidBytes[4],
-        uuidBytes[3],  uuidBytes[2],  uuidBytes[1],  uuidBytes[0],
-
-        (uint8_t)(major >> 8), (uint8_t)(major & 0xFF),
-
-        (uint8_t)(minor >> 8), (uint8_t)(minor & 0xFF),
-
-        (uint8_t)TX_POWER
-    };
-
-    BLEAdvertisementData oAdvertisementData;
-    oAdvertisementData.setFlags(0x04);
-    
-    oAdvertisementData.setManufacturerData(String((char*)beaconData, 26));
-
-    pAdvertising->setAdvertisementData(oAdvertisementData);
-    pAdvertising->start();
-
-    Serial.println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
-    Serial.println("Beacon Güncellendi");
-    Serial.print("   Ders Kodu : "); Serial.println(major);
-    Serial.print("   Oturum No : "); Serial.println(minor);
-    Serial.println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+void rgbAyarla(bool kirmiziDurum, bool yesilDurum, bool maviDurum) {
+    digitalWrite(PIN_KIRMIZI, kirmiziDurum);
+    digitalWrite(PIN_YESIL, yesilDurum);
+    digitalWrite(PIN_MAVI, maviDurum);
 }
+
+void sistemHazirAnimasyonu() {
+    rgbAyarla(LOW, LOW, HIGH); 
+    tone(PIN_BUZZER, 440, 200); 
+    delay(250);
+    rgbAyarla(LOW, HIGH, LOW);
+    tone(PIN_BUZZER, 880, 400); 
+    delay(500);
+    rgbAyarla(LOW, LOW, LOW);
+}
+
+class MyAdvertisedDeviceCallbacks: public BLEAdvertisedDeviceCallbacks {
+    void onResult(BLEAdvertisedDevice advertisedDevice) {
+
+        Serial.print(".");
+        String deviceMac = advertisedDevice.getAddress().toString().c_str();
+        
+     
+        if (advertisedDevice.haveRSSI()) {
+            
+            
+            int rssi = advertisedDevice.getRSSI();
+            Serial.printf("Cihaz: %s | RSSI: %d \n", deviceMac.c_str(), rssi);
+            
+            if (aktifDersKodu > 0 && aktifOturumNo > 0) {
+            
+                String dbPath = "/Yoklamalar/" + String(aktifDersKodu) + "/Oturum_" + String(aktifOturumNo) + "/" + deviceMac;
+                
+                if (Firebase.RTDB.setInt(&fbdo, dbPath + "/rssi", rssi)) {
+                    Serial.println("  ✅ Firebase'e başarıyla kaydedildi.");
+                } else {
+
+                    Serial.println("  ❌ Firebase Kayıt Hatası: " + fbdo.errorReason());
+                }
+            } else {
+                Serial.println("  ⚠️ Aktif ders numarası alınamadı, Firebase'e yazılamıyor.");
+            }
+        }
+        Serial.println("---------------------------------");
+    }
+};
 
 void setup() {
     Serial.begin(115200);
-    Serial.println("\n ESP32 Sınıf Yoklama Sistemi Başlatılıyor...");
-    Serial.println("   Bu ESP32 bu sınıfa aittir.");
-    Serial.println("   Dersler Firebase'den otomatik alınacak.\n");
-
-    BLEDevice::init("ESP32-Sinif-301"); 
-    pAdvertising = BLEDevice::getAdvertising();
-
-    iBeaconYayinGuncelle(aktifDersKodu, aktifOturumNo);
     
-    Serial.println("✅ Sistem Hazır!\n");
+    pinMode(PIN_KIRMIZI, OUTPUT);
+    pinMode(PIN_YESIL, OUTPUT);
+    pinMode(PIN_MAVI, OUTPUT);
+    pinMode(PIN_BUZZER, OUTPUT);
+    rgbAyarla(LOW, LOW, LOW);
+
+    Serial.println("\n--- ESP32 Yoklama Sistemi Başlatılıyor ---");
+    
+    WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+    Serial.print("Wi-Fi ağına bağlanılıyor");
+    while (WiFi.status() != WL_CONNECTED) {
+        rgbAyarla(HIGH, LOW, LOW);
+        Serial.print(".");
+        delay(150);
+        rgbAyarla(LOW, LOW, LOW);
+        delay(150);
+    }
+    Serial.println("\n✅ Wi-Fi Bağlantısı Başarılı!");
+
+    config_firebase.api_key = API_KEY;
+    config_firebase.database_url = DATABASE_URL;
+    Firebase.signUp(&config_firebase, &auth, "", ""); 
+    config_firebase.token_status_callback = tokenStatusCallback;
+    
+    Firebase.begin(&config_firebase, &auth);
+    Firebase.reconnectWiFi(true);
+    Serial.println("✅ Firebase Bağlantısı Başlatıldı!");
+
+    BLEDevice::init("");
+    pBLEScan = BLEDevice::getScan(); 
+    pBLEScan->setAdvertisedDeviceCallbacks(new MyAdvertisedDeviceCallbacks());
+    pBLEScan->setActiveScan(true); 
+    pBLEScan->setInterval(100);
+    pBLEScan->setWindow(99); 
+    
+    sistemHazirAnimasyonu();
+    Serial.println("✅ Sistem Tamamen Hazır ve Tarama Yapmaya Başlıyor!\n");
 }
 
 void loop() {
 
+    if (Firebase.RTDB.getInt(&fbdo, "/AktifDers/DersKodu")) {
+        aktifDersKodu = fbdo.intData();
+    }
+    if (Firebase.RTDB.getInt(&fbdo, "/AktifDers/OturumNo")) {
+        aktifOturumNo = fbdo.intData();
+    }
+
+    Serial.println("\n⚡ Durum: Dinleniyor | Ders: " + String(aktifDersKodu) + " | Oturum: #" + String(aktifOturumNo));
+
+    rgbAyarla(LOW, LOW, HIGH);
+    BLEScanResults* foundDevices = pBLEScan->start(scanTime, false);
+    
+    int cihazSayisi = foundDevices->getCount();
+    Serial.printf("\nTarama Tamamlandı, Bulunan Cihaz Sayısı: %d\n", cihazSayisi);
+
+    if (aktifDersKodu > 0 && aktifOturumNo > 0) {
+        for (int i = 0; i < cihazSayisi; i++) {
+            BLEAdvertisedDevice device = foundDevices->getDevice(i);
+            
+            if (device.haveRSSI()) {
+                String deviceMac = device.getAddress().toString().c_str();
+                int rssi = device.getRSSI();
+                
+                String dbPath = "/Yoklamalar/" + String(aktifDersKodu) + "/Oturum_" + String(aktifOturumNo) + "/" + deviceMac;
+                
+                if (Firebase.RTDB.setInt(&fbdo, dbPath + "/rssi", rssi)) {
+                    Serial.printf("✅ Gönderildi: %s | RSSI: %d\n", deviceMac.c_str(), rssi);
+                } else {
+                    Serial.printf("❌ Hata: %s\n", fbdo.errorReason().c_str());
+                }
+                
+                delay(150); 
+            }
+        }
+    } else {
+        Serial.println("⚠️ Aktif ders numarası alınamadı, Firebase'e yazılamıyor.");
+    }
+    
+    pBLEScan->clearResults(); 
+    rgbAyarla(LOW, LOW, LOW);
     
     delay(10000);
-    Serial.println("💓 Sistem çalışıyor | Ders: " + 
-                   String(aktifDersKodu) + 
-                   " | Oturum: #" + String(aktifOturumNo));
 }
