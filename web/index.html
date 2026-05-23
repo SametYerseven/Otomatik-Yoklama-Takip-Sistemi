@@ -1,0 +1,18 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <title>Akıllı Yoklama Sistemi</title>
+    <!-- Firebase SDK'larını CDN üzerinden sayfaya dahil ediyoruz -->
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+</head>
+<body>
+    <h2>Dersteki Öğrenciler (Canlı)</h2>
+    <!-- Gelen verilerin JS tarafından ekleneceği (DOM Manipülasyonu) HTML elementi -->
+    <ul id="yoklamaListesi"></ul>
+
+    <!-- Kendi yazdığımız JavaScript dosyasını sayfanın en altında çağırıyoruz -->
+    <script src="app.js"></script>
+</body>
+</html>
