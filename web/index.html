@@ -2,17 +2,197 @@
 <html lang="tr">
 <head>
     <meta charset="UTF-8">
-    <title>Akıllı Yoklama Sistemi</title>
-    <!-- Firebase SDK'larını CDN üzerinden sayfaya dahil ediyoruz -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Akıllı Yoklama Sistemi - Yönetim Paneli</title>
+    
+    <!-- Firebase SDK'ları -->
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+
+    <!-- Modern Tasarım için Yazı Tipi ve İkonlar -->
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="style.css">
+
+    <!-- Excel Raporlama için SheetJS Kütüphanesi -->
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 </head>
 <body>
-    <h2>Dersteki Öğrenciler (Canlı)</h2>
-    <!-- Gelen verilerin JS tarafından ekleneceği (DOM Manipülasyonu) HTML elementi -->
-    <ul id="yoklamaListesi"></ul>
 
-    <!-- Kendi yazdığımız JavaScript dosyasını sayfanın en altında çağırıyoruz -->
+    <!-- 1. EKRAN: GİRİŞ EKRANI -->
+    <div id="screen-login" class="auth-container">
+        <div class="login-card">
+            <div class="login-header">
+                <i class="fa-solid fa-graduation-cap login-logo"></i>
+                <h2>Öğretmen Giriş Paneli</h2>
+                <p>Sisteme erişmek için bilgilerinizi giriniz.</p>
+            </div>
+            <form id="form-login">
+                <div class="form-group">
+                    <label><i class="fa-solid fa-envelope"></i> E-Posta</label>
+                    <input type="email" id="login-email" placeholder="ornek@mu.edu.tr" required value="osman.altay@mu.edu.tr">
+                </div>
+                <div class="form-group">
+                    <label><i class="fa-solid fa-lock"></i> Şifre</label>
+                    <input type="password" id="login-password" placeholder="••••••••" required value="123456">
+                </div>
+                <button type="submit" class="btn-block">Giriş Yap</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- 2. EKRAN: DERS SEÇME VE İŞLEMLERİ DÜZENLEME EKRANI -->
+    <div id="screen-course-select" class="main-screen hidden">
+        <header class="navbar">
+            <div class="logo">
+                <i class="fa-solid fa-tower-broadcast"></i>
+                <span>Akıllı Yoklama Takip Sistemi</span>
+            </div>
+            <div class="navbar-actions">
+                <button class="theme-toggle btn-theme" title="Temayı Değiştir">
+                    <i class="fa-solid fa-moon"></i>
+                </button>
+                <span id="teacher-name"><i class="fa-solid fa-user-tie"></i> Doç. Dr. Osman Altay</span>
+            </div>
+        </header>
+
+        <main class="select-container">
+            <div class="welcome-box">
+                <h2>Hoş Geldiniz, <span class="highlight">Doç. Dr. Osman Altay</span></h2>
+                <p>Yoklamasını başlatmak istediğiniz dersi seçin ve oturumu yapılandırın.</p>
+            </div>
+
+            <div class="selection-grid">
+                <div class="config-card">
+                    <h3><i class="fa-solid fa-book-bookmark"></i> Ders Yapılandırması</h3>
+                    <div class="form-group">
+                        <label for="select-course">Aktif Dönem Dersleriniz</label>
+                        <select id="select-course">
+                            <option value="3114">SE 3114 - Nesnelerin İnterneti ve IoT Uygulamaları</option>
+                            <option value="3115">SE 3115 - Bilgisayar Ağları ve Yönetimi</option>
+                            <option value="4101">SE 4101 - Yapay Zeka Tabanlı Sistemler</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="select-session">Oturum Tipi</label>
+                        <select id="select-session">
+                            <option value="Oturum_1">1. Oturum (Blok Ders)</option>
+                            <option value="Oturum_2">2. Oturum (Blok Ders)</option>
+                        </select>
+                    </div>
+                    <button id="btn-start-attendance" class="btn-block success">
+                        <i class="fa-solid fa-play"></i> Yoklamayı Başlat
+                    </button>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- 3. EKRAN: YOKLAMANIN BAŞLADIĞI EKRAN (DASHBOARD) -->
+    <div id="screen-dashboard" class="main-screen hidden">
+        <header class="navbar">
+            <div class="logo">
+                <i class="fa-solid fa-tower-broadcast"></i>
+                <span>Akıllı Yoklama Takip Sistemi</span>
+            </div>
+            <div class="navbar-actions">
+                <button class="theme-toggle btn-theme" title="Temayı Değiştir">
+                    <i class="fa-solid fa-moon"></i>
+                </button>
+                <div class="system-status">
+                    <span class="status-dot online"></span>
+                    <span id="connection-text">ESP32 Canlı Bağlantı Aktif</span>
+                </div>
+            </div>
+        </header>
+
+        <main class="dashboard-container">
+            <!-- Ders ve Akademik Bilgi Alanı -->
+            <section class="course-info-section">
+                <div class="course-card">
+                    <div class="course-details">
+                        <span class="course-code" id="dyn-course-code">SE 3114</span>
+                        <h1 id="dyn-course-name">Nesnelerin İnterneti ve IoT Uygulamaları</h1>
+                        <p class="instructor-name"><i class="fa-solid fa-user-tie"></i> Doç. Dr. Osman Altay</p>
+                    </div>
+                    <div class="session-badge">
+                        <i class="fa-solid fa-clock"></i>
+                        <div>
+                            <span class="session-title">Aktif Oturum</span>
+                            <span id="dyn-session-text" class="session-value">1. Oturum (Blok Ders)</span>
+                        </div>
+                    </div>
+                </div>
+            </section>
+            
+            <!-- Öğrenci Giriş Portalı (Kartlar) -->
+            <section class="portal-section">
+                <h2 class="section-title"><i class="fa-solid fa-chart-pie"></i> Öğrenci Giriş Portalı</h2>
+                <div class="dashboard-stats">
+                    <div class="stat-card total">
+                        <div class="stat-icon"><i class="fa-solid fa-users"></i></div>
+                        <div class="stat-info">
+                            <h3>Kayıtlı Öğrenci</h3>
+                            <p id="total-students">0</p>
+                        </div>
+                    </div>
+                    <div class="stat-card present">
+                        <div class="stat-icon"><i class="fa-solid fa-user-check"></i></div>
+                        <div class="stat-info">
+                            <h3>Sınıfta (Var)</h3>
+                            <p id="present-students">0</p>
+                        </div>
+                    </div>
+                    <div class="stat-card absent">
+                        <div class="stat-icon"><i class="fa-solid fa-user-slash"></i></div>
+                        <div class="stat-info">
+                            <h3>Sınıfta Olmayan (Yok)</h3>
+                            <p id="absent-students">0</p>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Tablo Alanı -->
+            <section class="table-section">
+                <div class="table-header">
+                    <div class="table-title">
+                        <h2><i class="fa-solid fa-list-check"></i> Canlı Katılım ve Süre Takip Listesi</h2>
+                        <p>BLE sinyallerine göre anlık olarak güncellenir.</p>
+                    </div>
+                    <button id="btn-export" class="btn-excel">
+                        <i class="fa-solid fa-file-excel"></i> Excel Raporu İndir
+                    </button>
+                </div>
+
+                <div class="table-responsive">
+                    <table id="attendance-table">
+                        <thead>
+                            <tr>
+                                <th>Öğrenci No</th>
+                                <th>Adı Soyadı</th>
+                                <th>Ders Kaydı</th>
+                                <th>Sınıf Durumu</th>
+                                <th>Son Görülme</th>
+                                <th>Toplam Katılım Süresi</th>
+                            </tr>
+                        </thead>
+                        <tbody id="attendance-tbody">
+                            <tr id="no-data-row">
+                                <td colspan="6" class="table-empty">
+                                    <i class="fa-solid fa-spinner fa-spin"></i> Firebase verileri bekleniyor...
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- Arkadaşının eski listesi (Arka planda uyumluluk için gizli tutuluyor) -->
+    <ul id="yoklamaListesi" style="display: none;"></ul>
+
     <script src="app.js"></script>
 </body>
 </html>
