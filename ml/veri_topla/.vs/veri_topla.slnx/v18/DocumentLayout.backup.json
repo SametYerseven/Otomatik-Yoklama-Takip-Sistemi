@@ -1,0 +1,37 @@
+{
+  "Version": 1,
+  "WorkspaceRootPath": "C:\\projeler\\Otomatik-Yoklama-Takip-Sistemi\\ml\\veri_topla\\",
+  "Documents": [
+    {
+      "AbsoluteMoniker": "D:0:0:{AF1FCAC8-2C26-4C19-BB3B-04A76DD2EE2F}|veri_topla\\veri_topla.pyproj|C:\\projeler\\Otomatik-Yoklama-Takip-Sistemi\\ml\\veri_topla\\veri_topla\\veri_topla.py||{8B382828-6202-11D1-8870-0000F87579D2}",
+      "RelativeMoniker": "D:0:0:{AF1FCAC8-2C26-4C19-BB3B-04A76DD2EE2F}|veri_topla\\veri_topla.pyproj|solutionrelative:veri_topla\\veri_topla.py||{8B382828-6202-11D1-8870-0000F87579D2}"
+    }
+  ],
+  "DocumentGroupContainers": [
+    {
+      "Orientation": 0,
+      "VerticalTabListWidth": 256,
+      "DocumentGroups": [
+        {
+          "DockedWidth": 200,
+          "SelectedChildIndex": 0,
+          "Children": [
+            {
+              "$type": "Document",
+              "DocumentIndex": 0,
+              "Title": "veri_topla.py",
+              "DocumentMoniker": "C:\\projeler\\Otomatik-Yoklama-Takip-Sistemi\\ml\\veri_topla\\veri_topla\\veri_topla.py",
+              "RelativeDocumentMoniker": "veri_topla\\veri_topla.py",
+              "ToolTip": "C:\\projeler\\Otomatik-Yoklama-Takip-Sistemi\\ml\\veri_topla\\veri_topla\\veri_topla.py*",
+              "RelativeToolTip": "veri_topla\\veri_topla.py*",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAoAAABbAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.002457|",
+              "WhenOpened": "2026-05-24T16:33:07.833Z",
+              "EditorCaption": ""
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
