@@ -8,12 +8,20 @@ let aktifOgretmen = null;
 let aktifDersAd = "";
 let seciliSinif = "";
 let dersDurumu = "BEKLEMEDE";
-let girisYapanlarListesi = {};
-let cikisYapanlarListesi = {};
-let ogrenciHavuzu = {}; // Artık Firebase'den yükleniyor
+let girisYapanlarListesi = {};  
+let cikisYapanlarListesi = {};  
+let ogrenciHavuzu = {}; 
+
+let anlikVarlikVerisi = {}; 
+let yoklamaZamanlayici = null;
+let toplamYoklamaSayisi = 0;
+let ogrenciLoglari = {}; 
+
+let dersBaslangicZamani = null;
+let dersSayaciInterval = null;
 
 // ==========================================================================
-// 2. TOAST BİLDİRİM SİSTEMİ (alert() yerine)
+// 2. TOAST BİLDİRİM SİSTEMİ
 // ==========================================================================
 function toast(mesaj, tip = 'info') {
     const ikonlar = { success: 'fa-check-circle', danger: 'fa-circle-xmark', warning: 'fa-triangle-exclamation', info: 'fa-circle-info' };
@@ -40,7 +48,7 @@ setInterval(updateClock, 1000);
 updateClock();
 
 // ==========================================================================
-// 4. GİRİŞ İŞLEMİ (LOGIN)
+// 4. GİRİŞ İŞLEMİ (LOGIN) & CANLI ÖĞRENCİ DİNLEYİCİSİ
 // ==========================================================================
 document.getElementById('form-login').addEventListener('submit', (e) => {
     e.preventDefault();
@@ -56,13 +64,7 @@ document.getElementById('form-login').addEventListener('submit', (e) => {
             aktifOgretmen = snap.val();
             document.getElementById('teacher-name-display').innerText = aktifOgretmen.isim;
 
-            // Sınıfları ve öğrencileri aynı anda yükle
-            Promise.all([
-                db.ref('Siniflar').once('value'),
-                db.ref('Ogrenciler').once('value')
-            ]).then(([sinifSnap, ogrenciSnap]) => {
-
-                // Sınıf seçim listesi
+            db.ref('Siniflar').once('value').then((sinifSnap) => {
                 const selectRoom = document.getElementById('select-room-modal');
                 selectRoom.innerHTML = "";
                 if (sinifSnap.exists()) {
@@ -71,24 +73,26 @@ document.getElementById('form-login').addEventListener('submit', (e) => {
                     });
                 }
 
-                // Öğrenci havuzu: Firebase'den yükle, yoksa varsayılanları kaydet
-                if (ogrenciSnap.exists()) {
-                    ogrenciHavuzu = ogrenciSnap.val();
-                } else {
-                    ogrenciHavuzu = {
-                        "232804009": "Samet Yerseven",
-                        "220101004": "Talha Gürün",
-                        "987654321": "Ayşe Kaya"
-                    };
-                    db.ref('Ogrenciler').set(ogrenciHavuzu);
-                }
+                db.ref('Ogrenciler').on('value', (ogrenciSnap) => {
+                    if (ogrenciSnap.exists()) {
+                        ogrenciHavuzu = ogrenciSnap.val();
+                    } else {
+                        ogrenciHavuzu = {};
+                    }
+                    
+                    if(!document.getElementById('modal-students').classList.contains('hidden')) {
+                        guncelleOgrenciListesiModal();
+                    }
+                    if (dersDurumu !== "BEKLEMEDE") {
+                        tablolariCiz();
+                    }
+                });
 
                 dersKartlariniOlustur();
                 document.getElementById('screen-login').classList.add('hidden');
                 document.getElementById('screen-main').classList.remove('hidden');
                 toast(`Hoş geldiniz, ${aktifOgretmen.isim}`, 'success');
             });
-
         } else {
             toast("Kullanıcı adı veya şifre hatalı!", 'danger');
             btnLogin.disabled = false;
@@ -98,34 +102,26 @@ document.getElementById('form-login').addEventListener('submit', (e) => {
 });
 
 // ==========================================================================
-// 5. DERS KARTLARI + ARAMA ÇUBUĞU
+// 5. DERS KARTLARI
 // ==========================================================================
 function dersKartlariniOlustur(filtre = "") {
     const container = document.getElementById('course-grid-container');
     container.innerHTML = "";
-
-    const filtrelenmis = aktifOgretmen.dersler.filter(ders =>
-        ders.toLowerCase().includes(filtre.toLowerCase())
-    );
+    const filtrelenmis = aktifOgretmen.dersler.filter(ders => ders.toLowerCase().includes(filtre.toLowerCase()));
 
     if (filtrelenmis.length === 0) {
-        container.innerHTML = `<div style="color: var(--text-muted); padding: 20px; grid-column: 1/-1;">
-            <i class="fa-solid fa-magnifying-glass" style="margin-right:8px;"></i>Aramanızla eşleşen ders bulunamadı.
-        </div>`;
+        container.innerHTML = `<div style="color: var(--text-muted); padding: 20px; grid-column: 1/-1;">Kayıt bulunamadı.</div>`;
         return;
     }
 
     filtrelenmis.forEach((ders) => {
         const parts = ders.split(" - ");
-        const kod = parts[0] || "DERS";
-        const ad = parts[1] || ders;
-
         const card = document.createElement('div');
         card.className = "course-card";
         card.innerHTML = `
             <div class="card-header">
-                <span class="card-code">${kod}</span>
-                <h3>${ad} (N.Ö)</h3>
+                <span class="card-code">${parts[0]}</span>
+                <h3>${parts[1] || ders} (N.Ö)</h3>
             </div>
             <div class="card-body">
                 <p><i class="fa-solid fa-user"></i> ${aktifOgretmen.isim}</p>
@@ -140,95 +136,62 @@ function dersKartlariniOlustur(filtre = "") {
         container.appendChild(card);
     });
 }
+document.querySelector('.search-bar-container input').addEventListener('input', (e) => dersKartlariniOlustur(e.target.value));
+document.getElementById('btn-cancel-modal').addEventListener('click', () => document.getElementById('modal-room-select').classList.add('hidden'));
 
-// Arama çubuğu - gerçek zamanlı filtreleme
-document.querySelector('.search-bar-container input').addEventListener('input', (e) => {
-    dersKartlariniOlustur(e.target.value);
+// Modal Öğrenci Yönetimi
+document.getElementById('btn-show-students').addEventListener('click', () => { 
+    guncelleOgrenciListesiModal(); 
+    document.getElementById('modal-students').classList.remove('hidden'); 
 });
+document.getElementById('btn-close-students').addEventListener('click', () => { document.getElementById('modal-students').classList.add('hidden'); });
 
-document.getElementById('btn-cancel-modal').addEventListener('click', () => {
-    document.getElementById('modal-room-select').classList.add('hidden');
-});
+window.toggleAccordion = function(id) {
+    const row = document.getElementById(id);
+    if(row) row.classList.toggle('hidden');
+};
 
 // ==========================================================================
-// 6. ÖĞRENCİ YÖNETİM MODALI — FİREBASE BAĞLANTILI
+// 6. ÖĞRENCİ EKLEME, SİLME VE MANUEL YOKLAMA
 // ==========================================================================
-document.getElementById('btn-show-students').addEventListener('click', () => {
-    guncelleOgrenciListesiModal();
-    document.getElementById('modal-students').classList.remove('hidden');
-});
-
-document.getElementById('btn-close-students').addEventListener('click', () => {
-    document.getElementById('modal-students').classList.add('hidden');
-});
-
 document.getElementById('btn-add-student').addEventListener('click', () => {
     const no = document.getElementById('new-student-no').value.trim();
     const ad = document.getElementById('new-student-name').value.trim();
 
-    if (!no || !ad) {
-        toast("Öğrenci no ve adını eksiksiz girin.", 'warning');
-        return;
-    }
-    if (ogrenciHavuzu[no]) {
-        toast(`${no} numaralı öğrenci zaten kayıtlı.`, 'warning');
-        return;
-    }
+    if (!no || !ad) { toast("Öğrenci no ve adını eksiksiz girin.", 'warning'); return; }
+    if (ogrenciHavuzu[no]) { toast(`${no} numaralı öğrenci zaten kayıtlı.`, 'warning'); return; }
 
-    ogrenciHavuzu[no] = ad;
-    db.ref(`Ogrenciler/${no}`).set(ad)
-        .then(() => {
-            document.getElementById('new-student-no').value = "";
-            document.getElementById('new-student-name').value = "";
-            guncelleOgrenciListesiModal();
-            tablolariCiz();
-            toast(`${ad} başarıyla eklendi.`, 'success');
-        })
-        .catch(() => {
-            delete ogrenciHavuzu[no]; // geri al
-            toast("Firebase bağlantı hatası, öğrenci eklenemedi.", 'danger');
-        });
+    db.ref(`Ogrenciler/${no}`).set(ad).then(() => {
+        document.getElementById('new-student-no').value = "";
+        document.getElementById('new-student-name').value = "";
+        toast(`${ad} başarıyla eklendi.`, 'success');
+    }).catch(() => toast("Firebase bağlantı hatası.", 'danger'));
 });
 
-// Global: HTML içi onclick'ten çağrılabilmesi için window'a atanıyor
 window.ogrenciSil = function(no) {
     const ad = ogrenciHavuzu[no];
     if (!confirm(`"${ad}" (${no}) kalıcı olarak silinecek. Emin misiniz?`)) return;
 
-    delete ogrenciHavuzu[no];
-    db.ref(`Ogrenciler/${no}`).remove()
-        .then(() => {
-            guncelleOgrenciListesiModal();
-            tablolariCiz();
-            toast(`${ad} silindi.`, 'warning');
-        })
-        .catch(() => {
-            ogrenciHavuzu[no] = ad; // geri al
-            toast("Firebase bağlantı hatası, öğrenci silinemedi.", 'danger');
-        });
+    db.ref(`Ogrenciler/${no}`).remove().then(() => {
+        toast(`${ad} silindi.`, 'warning');
+    }).catch(() => toast("Firebase bağlantı hatası.", 'danger'));
 };
 
-// Manuel yoklama: BLE bağlanamayan öğrenciyi elle aktif listeye ekler
+// ÇÖZÜM 2: MANUEL YOKLAMAYA EKLEME FONKSİYONU GERİ GETİRİLDİ
 window.ogrenciManuelEkle = function(no) {
     if (dersDurumu === "BEKLEMEDE") {
         toast("Aktif bir ders oturumu yok.", 'warning');
         return;
     }
-    const ad = ogrenciHavuzu[no];
-    const fakeKey = `MANUEL_${no}`;
-    const hedefListe = dersDurumu === "CIKIS_ACIK" ? cikisYapanlarListesi : girisYapanlarListesi;
 
-    if (Object.values(hedefListe).includes(no)) {
-        toast(`${ad} zaten ${dersDurumu === "CIKIS_ACIK" ? "çıkış" : "giriş"} listesinde.`, 'warning');
-        return;
-    }
-
-    db.ref(`Eslestirmeler/${seciliSinif}/${fakeKey}`).set(no)
-        .then(() => {
-            toast(`${ad} manuel olarak ${dersDurumu === "CIKIS_ACIK" ? "çıkışa" : "girişe"} eklendi.`, 'success');
-            guncelleOgrenciListesiModal();
-        })
-        .catch(() => toast("Firebase bağlantı hatası, eklenemedi.", 'danger'));
+    const dbPath = `Varlik/${seciliSinif}/${no}`;
+    db.ref(dbPath).set({
+        durum: "SINIFTA",
+        mac: "Manuel-Giris",
+        manuel: true
+    }).then(() => {
+        toast(`${ogrenciHavuzu[no]} manuel olarak yoklamaya eklendi.`, 'success');
+    }).catch(() => toast("Firebase bağlantı hatası.", 'danger'));
 };
 
 function guncelleOgrenciListesiModal() {
@@ -238,27 +201,25 @@ function guncelleOgrenciListesiModal() {
 
     if (sayac) sayac.innerText = `${count} öğrenci`;
 
-    // Aktif oturumda hangi öğrenciler zaten listede?
-    const aktifListe = dersDurumu === "CIKIS_ACIK" ? cikisYapanlarListesi :
-                       dersDurumu === "GIRIS_ACIK"  ? girisYapanlarListesi : {};
     const oturumAktif = dersDurumu !== "BEKLEMEDE";
-
     list.innerHTML = "";
     if (count === 0) {
         list.innerHTML = `<tr><td colspan="${oturumAktif ? 4 : 3}" class="empty-state">Kayıtlı öğrenci yok.</td></tr>`;
         return;
     }
 
-    // Thead güncelle: aktif oturumda "Manuel Ekle" sütunu göster
     const thead = document.getElementById('modal-student-thead');
     if (thead) {
         thead.innerHTML = oturumAktif
-            ? `<tr><th>Öğrenci No</th><th>Ad Soyad</th><th style="text-align:center">Yoklama</th><th style="text-align:right;padding-right:15px">Sil</th></tr>`
-            : `<tr><th>Öğrenci No</th><th>Ad Soyad</th><th style="text-align:right;padding-right:15px">Sil</th></tr>`;
+            ? `<tr><th>Öğrenci No</th><th>Ad Soyad</th><th style="text-align:center">Yoklama</th><th style="text-align:right;padding-right:15px">İşlem</th></tr>`
+            : `<tr><th>Öğrenci No</th><th>Ad Soyad</th><th style="text-align:right;padding-right:15px">İşlem</th></tr>`;
     }
 
     for (let no in ogrenciHavuzu) {
-        const zatenVar = Object.values(aktifListe).includes(no);
+        const isim = ogrenciHavuzu[no];
+        // Öğrencinin o an listede olup olmadığını kontrol et
+        const zatenVar = (dersDurumu === "CIKIS_ACIK") ? !!cikisYapanlarListesi[no] : !!girisYapanlarListesi[no];
+
         const manuelBtn = oturumAktif
             ? `<td style="text-align:center">
                 <button onclick="ogrenciManuelEkle('${no}')"
@@ -274,7 +235,7 @@ function guncelleOgrenciListesiModal() {
         list.innerHTML += `
             <tr>
                 <td><strong>${no}</strong></td>
-                <td>${ogrenciHavuzu[no]}</td>
+                <td>${isim}</td>
                 ${manuelBtn}
                 <td style="text-align:right; padding-right: 15px;">
                     <button onclick="ogrenciSil('${no}')" class="btn-icon-danger" title="Öğrenciyi Sil">
@@ -286,7 +247,7 @@ function guncelleOgrenciListesiModal() {
 }
 
 // ==========================================================================
-// 7. YOKLAMAYI BAŞLATMA
+// 7. YOKLAMAYI BAŞLATMA VE SAYAC
 // ==========================================================================
 document.getElementById('btn-confirm-start').addEventListener('click', () => {
     seciliSinif = document.getElementById('select-room-modal').value;
@@ -295,12 +256,10 @@ document.getElementById('btn-confirm-start').addEventListener('click', () => {
     document.getElementById('nav-yoklama').classList.add('active');
     document.getElementById('nav-yoklama').classList.remove('disabled');
 
-    document.getElementById('page-title').innerText = "Aktif Yoklama Oturumu";
-    document.getElementById('page-subtitle').innerText = "Çift aşamalı donanım destekli yoklama paneli.";
-
     document.getElementById('dyn-course-code').innerText = aktifDersAd.split(" - ")[0];
     document.getElementById('dyn-course-name').innerText = aktifDersAd.split(" - ")[1] || aktifDersAd;
-    document.getElementById('dyn-room-name').innerText = `Sınıf ${seciliSinif}`;
+    
+    document.getElementById('dyn-room-name').innerHTML = `Sınıf ${seciliSinif} &nbsp;|&nbsp; <i class="fa-solid fa-stopwatch" style="color:var(--primary);"></i> Toplam Süre: <span id="lesson-timer-display" style="font-weight:bold;">00:00</span>`;
 
     document.getElementById('modal-room-select').classList.add('hidden');
     document.getElementById('view-courses').classList.add('hidden');
@@ -308,6 +267,7 @@ document.getElementById('btn-confirm-start').addEventListener('click', () => {
 
     document.getElementById('btn-take-exit-attendance').style.display = 'inline-flex';
     document.getElementById('btn-end-class').disabled = true;
+
     const badge = document.getElementById('attendance-status-badge');
     badge.className = "status-indicator in-progress";
     badge.style = "";
@@ -316,32 +276,77 @@ document.getElementById('btn-confirm-start').addEventListener('click', () => {
     dersDurumu = "GIRIS_ACIK";
     girisYapanlarListesi = {};
     cikisYapanlarListesi = {};
+    
+    toplamYoklamaSayisi = 0;
+    ogrenciLoglari = {};
+    for (let no in ogrenciHavuzu) {
+        ogrenciLoglari[no] = { varSayisi: 0, kayitlar: [] };
+    }
 
-    // Önceki oturumun verilerini temizle (ghost öğrenci sorunu)
-    db.ref(`Eslestirmeler/${seciliSinif}`).remove().then(() => {
+    dersBaslangicZamani = new Date();
+    dersSayaciInterval = setInterval(() => {
+        const fark = Math.floor((new Date() - dersBaslangicZamani) / 1000);
+        const dk = String(Math.floor(fark / 60)).padStart(2, '0');
+        const sn = String(fark % 60).padStart(2, '0');
+        const timerEl = document.getElementById('lesson-timer-display');
+        if (timerEl) timerEl.innerText = `${dk}:${sn}`;
+    }, 1000);
+
+    db.ref(`Varlik/${seciliSinif}`).remove().then(() => {
         db.ref(`Sistem/${seciliSinif}`).set({ durum: "AKTIF", ders: aktifDersAd });
         verileriDinle();
-        toast(`Sınıf ${seciliSinif} aktif edildi. ESP32 bekleniyor...`, 'info');
+        
+        yoklamaZamanlayici = setInterval(otomatikYoklamaAl, 20000);
+        otomatikYoklamaAl(); 
+        
+        toast(`Sınıf ${seciliSinif} aktif edildi. Sürekli takip başlatıldı.`, 'info');
     });
 });
 
 // ==========================================================================
-// 8. ESP32 VERİLERİNİ DİNLEME VE 3 KOLONLU TABLO ÇİZİMİ
+// 8. FİREBASE DİNLEME VE PERİYODİK LOGLAMA
 // ==========================================================================
-let refEslestirme = null;
+let refVarlik = null;
 
 function verileriDinle() {
-    if (refEslestirme) refEslestirme.off();
-    refEslestirme = db.ref(`Eslestirmeler/${seciliSinif}`);
-    refEslestirme.on('value', (snap) => {
-        const gelenVeri = snap.exists() ? snap.val() : {};
-        if (dersDurumu === "GIRIS_ACIK") {
-            girisYapanlarListesi = gelenVeri;
-        } else if (dersDurumu === "CIKIS_ACIK") {
-            cikisYapanlarListesi = gelenVeri;
+    if (refVarlik) refVarlik.off();
+    refVarlik = db.ref(`Varlik/${seciliSinif}`);
+    refVarlik.on('value', (snap) => {
+        anlikVarlikVerisi = snap.exists() ? snap.val() : {};
+        
+        if (dersDurumu === "CIKIS_ACIK") {
+            for (let ogrNo in anlikVarlikVerisi) {
+                if (anlikVarlikVerisi[ogrNo].durum === "SINIFTA") {
+                    cikisYapanlarListesi[ogrNo] = ogrNo;
+                }
+            }
         }
-        tablolariCiz();
+        tablolariCiz(); 
     });
+}
+
+function otomatikYoklamaAl() {
+    if (dersDurumu !== "GIRIS_ACIK") return;
+    
+    toplamYoklamaSayisi++;
+    const simdi = new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+
+    for (let ogrNo in ogrenciHavuzu) {
+        const ogrenciDurumu = anlikVarlikVerisi[ogrNo];
+        
+        if (ogrenciDurumu && ogrenciDurumu.durum === "SINIFTA") {
+            if (!ogrenciLoglari[ogrNo]) {
+                ogrenciLoglari[ogrNo] = { varSayisi: 0, kayitlar: [] };
+            }
+            ogrenciLoglari[ogrNo].varSayisi++;
+            ogrenciLoglari[ogrNo].kayitlar.push({ zaman: simdi, durum: 'VAR', mac: ogrenciDurumu.mac || "Bilinmiyor" });
+            girisYapanlarListesi[ogrNo] = ogrNo; 
+        } else {
+            if (!ogrenciLoglari[ogrNo]) ogrenciLoglari[ogrNo] = { varSayisi: 0, kayitlar: [] };
+            ogrenciLoglari[ogrNo].kayitlar.push({ zaman: simdi, durum: 'YOK', mac: '-' });
+        }
+    }
+    tablolariCiz();
 }
 
 function tablolariCiz() {
@@ -351,54 +356,97 @@ function tablolariCiz() {
 
     let girisSayisi = 0, cikisSayisi = 0, genelVarSayisi = 0, genelYokSayisi = 0;
 
-    // 1. KOLON — Giriş Tablosu
     tbodyGiris.innerHTML = "";
-    for (let mac in girisYapanlarListesi) {
-        const no = girisYapanlarListesi[mac];
-        const isim = ogrenciHavuzu[no] || "<em style='color:var(--text-muted)'>Kayıt Dışı</em>";
+    for (let ogrNo in girisYapanlarListesi) {
+        const isim = ogrenciHavuzu[ogrNo] || "Kayıt Dışı";
         girisSayisi++;
-        tbodyGiris.innerHTML += `<tr><td><strong>${no}</strong></td><td>${isim}</td></tr>`;
+        
+        const logData = ogrenciLoglari[ogrNo];
+        const yuzde = toplamYoklamaSayisi === 0 ? 0 : Math.round((logData.varSayisi / toplamYoklamaSayisi) * 100);
+        const anlikMac = (anlikVarlikVerisi[ogrNo] && anlikVarlikVerisi[ogrNo].mac) ? anlikVarlikVerisi[ogrNo].mac : "-";
+        
+        const bagliGosterim = (dersDurumu === "CIKIS_ACIK") ? true : (anlikVarlikVerisi[ogrNo] && anlikVarlikVerisi[ogrNo].durum === "SINIFTA");
+
+        tbodyGiris.innerHTML += `
+            <tr style="cursor: pointer; background: ${bagliGosterim ? 'transparent' : 'rgba(239, 68, 68, 0.1)'}" onclick="toggleAccordion('acc-${ogrNo}')">
+                <td><strong>${ogrNo}</strong></td>
+                <td>
+                    ${isim} 
+                    <span style="float:right; font-size:0.8rem; background: ${yuzde >= 70 ? 'var(--success)' : 'var(--danger)'}; color: white; padding:2px 6px; border-radius:4px;">
+                        %${yuzde}
+                    </span>
+                </td>
+            </tr>
+            <tr id="acc-${ogrNo}" class="hidden" style="background: rgba(0,0,0,0.25);">
+                <td colspan="2" style="padding: 15px;">
+                    <div style="font-size:0.8rem; margin-bottom:10px; color:var(--text-muted); display:flex; justify-content:space-between;">
+                        <span><i class="fa-solid fa-microchip"></i> Son MAC: ${anlikMac}</span>
+                        <span><i class="fa-solid fa-clock"></i> Kontrol: ${toplamYoklamaSayisi}</span>
+                    </div>
+                    <div style="max-height: 150px; overflow-y: auto; border: 1px solid var(--border-color); border-radius: 4px;">
+                        <table style="width:100%; font-size:0.75rem; text-align:center; border-collapse: collapse;">
+                            <thead style="background:var(--bg-card); position:sticky; top:0;">
+                                <tr>
+                                    <th style="padding:6px; border-bottom:1px solid #374151;">Saat</th>
+                                    <th style="padding:6px; border-bottom:1px solid #374151;">Durum</th>
+                                    <th style="padding:6px; border-bottom:1px solid #374151;">MAC</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${logData.kayitlar.map(l => `
+                                    <tr>
+                                        <td style="padding:6px; border-bottom:1px solid #374151;">${l.zaman}</td>
+                                        <td style="padding:6px; border-bottom:1px solid #374151; color: ${l.durum === 'VAR' ? 'var(--success)' : 'var(--danger)'}; font-weight:bold;">${l.durum}</td>
+                                        <td style="padding:6px; border-bottom:1px solid #374151;">${l.mac}</td>
+                                    </tr>
+                                `).reverse().join('')}
+                            </tbody>
+                        </table>
+                    </div>
+                </td>
+            </tr>`;
     }
-    if (girisSayisi === 0)
-        tbodyGiris.innerHTML = `<tr><td colspan="2" class="empty-state">Bağlantı bekleniyor...</td></tr>`;
+    if (girisSayisi === 0) tbodyGiris.innerHTML = `<tr><td colspan="2" class="empty-state">Bağlantı bekleniyor...</td></tr>`;
     document.getElementById('giris-count').innerText = girisSayisi;
 
-    // 2. KOLON — Çıkış Tablosu
     tbodyCikis.innerHTML = "";
     if (dersDurumu === "GIRIS_ACIK") {
         tbodyCikis.innerHTML = `<tr><td colspan="2" class="empty-state">Çıkış başlamadı.</td></tr>`;
     } else {
-        for (let mac in cikisYapanlarListesi) {
-            const no = cikisYapanlarListesi[mac];
-            const isim = ogrenciHavuzu[no] || "<em style='color:var(--text-muted)'>Kayıt Dışı</em>";
+        for (let ogrNo in cikisYapanlarListesi) {
+            const isim = ogrenciHavuzu[ogrNo] || "Kayıt Dışı";
             cikisSayisi++;
-            tbodyCikis.innerHTML += `<tr><td><strong>${no}</strong></td><td>${isim}</td></tr>`;
+            tbodyCikis.innerHTML += `<tr><td><strong>${ogrNo}</strong></td><td>${isim}</td><td><span class="badge bg-success"><i class="fa-solid fa-check"></i> Onaylandı</span></td></tr>`;
         }
-        if (cikisSayisi === 0)
-            tbodyCikis.innerHTML = `<tr><td colspan="2" class="empty-state">Yeniden bağlantı bekleniyor...</td></tr>`;
+        if (cikisSayisi === 0) tbodyCikis.innerHTML = `<tr><td colspan="3" class="empty-state" style="color:var(--warning);"><i class="fa-solid fa-circle-notch fa-spin"></i> Öğrencilerin yeniden bağlanması bekleniyor...</td></tr>`;
     }
     document.getElementById('cikis-count').innerText = cikisSayisi;
 
-    // 3. KOLON — Tüm Sınıf Genel Özeti
     tbodyGenel.innerHTML = "";
     for (let ogrNo in ogrenciHavuzu) {
         const isim = ogrenciHavuzu[ogrNo];
         let durum = "YOK";
 
+        const logData = ogrenciLoglari[ogrNo] || { varSayisi: 0 };
+        const yuzde = toplamYoklamaSayisi === 0 ? 0 : Math.round((logData.varSayisi / toplamYoklamaSayisi) * 100);
+
         if (dersDurumu === "GIRIS_ACIK") {
-            if (Object.values(girisYapanlarListesi).includes(ogrNo)) durum = "VAR";
+            if (anlikVarlikVerisi[ogrNo] && anlikVarlikVerisi[ogrNo].durum === "SINIFTA") durum = "VAR";
         } else if (dersDurumu === "CIKIS_ACIK") {
-            const giristeVar = Object.values(girisYapanlarListesi).includes(ogrNo);
-            const cikistaVar = Object.values(cikisYapanlarListesi).includes(ogrNo);
-            if (giristeVar && cikistaVar) durum = "VAR";
+            const giristeVar = !!girisYapanlarListesi[ogrNo];
+            const cikistaVar = !!cikisYapanlarListesi[ogrNo];
+
+            if (giristeVar && cikistaVar && yuzde >= 70) {
+                durum = "VAR";
+            }
         }
 
         if (durum === "VAR") {
             genelVarSayisi++;
-            tbodyGenel.innerHTML += `<tr><td><strong>${ogrNo}</strong></td><td>${isim}</td><td><span class="badge bg-success">VAR</span></td></tr>`;
+            tbodyGenel.innerHTML += `<tr><td><strong>${ogrNo}</strong></td><td>${isim}</td><td><span class="badge bg-success">VAR (%${yuzde})</span></td></tr>`;
         } else {
             genelYokSayisi++;
-            tbodyGenel.innerHTML += `<tr><td><strong>${ogrNo}</strong></td><td>${isim}</td><td><span class="badge bg-danger">YOK</span></td></tr>`;
+            tbodyGenel.innerHTML += `<tr><td><strong>${ogrNo}</strong></td><td>${isim}</td><td><span class="badge bg-danger">YOK (%${yuzde})</span></td></tr>`;
         }
     }
     document.getElementById('genel-var-count').innerText = genelVarSayisi;
@@ -406,11 +454,13 @@ function tablolariCiz() {
 }
 
 // ==========================================================================
-// 9. ÇIKIŞ YOKLAMASI VE DERSİ BİTİRME
+// 9. ÇIKIŞ YOKLAMASI VE DERSİ BİTİRME (ÇÖZÜM 1)
 // ==========================================================================
 document.getElementById('btn-take-exit-attendance').addEventListener('click', () => {
-    if (confirm("Giriş yoklaması kapanacak. Öğrencilerin yeniden bağlanması gerekecek. Emin misiniz?")) {
+    if (confirm("Çıkış yoklaması başlatılacak. ESP32 tüm öğrencileri atacak ve ders boyunca tutulan % kayıtları dondurulacaktır. Öğrencilerin yeniden bağlanması gerekecek. Emin misiniz?")) {
         dersDurumu = "CIKIS_ACIK";
+        
+        clearInterval(yoklamaZamanlayici); 
 
         document.getElementById('btn-take-exit-attendance').style.display = 'none';
         document.getElementById('btn-end-class').disabled = false;
@@ -419,18 +469,26 @@ document.getElementById('btn-take-exit-attendance').addEventListener('click', ()
         badge.className = "status-indicator";
         badge.style.border = "1px solid var(--warning)";
         badge.style.color = "var(--warning)";
-        badge.innerHTML = `<i class="fa-solid fa-rotate"></i> ÇIKIŞ YOKLAMASI AKTİF`;
+        badge.innerHTML = `<i class="fa-solid fa-rotate"></i> ÇIKIŞ YOKLAMASI BAŞLADI (Bağlantı Bekleniyor)`;
 
-        db.ref(`Eslestirmeler/${seciliSinif}`).remove();
-        tablolariCiz();
-        toast("Çıkış yoklaması başlatıldı. Öğrenciler yeniden bağlanabilir.", 'info');
+        cikisYapanlarListesi = {};
+
+        // YENİ EKLENEN KISIM: Firebase Varlık tablosu tamamen temizlenir. 
+        // Böylece eski 'SINIFTA' verisi gider, öğrenciler yeniden bağlanmaya zorlanır.
+        db.ref(`Varlik/${seciliSinif}`).remove().then(() => {
+            db.ref(`Sistem/${seciliSinif}`).update({ durum: "CIKIS" });
+            tablolariCiz();
+            toast("Çıkış yoklaması başladı. Öğrenciler cihazlardan düşürüldü, tekrar bağlanmaları bekleniyor.", 'info');
+        });
     }
 });
 
 document.getElementById('btn-end-class').addEventListener('click', () => {
-    if (confirm("Ders bitirilecek. ESP32 uyku moduna geçecek. Onaylıyor musunuz?")) {
+    if (confirm("Ders bitirilecek. ESP32 bekleme moduna geçecek. Onaylıyor musunuz?")) {
+        clearInterval(dersSayaciInterval); 
+        
         db.ref(`Sistem/${seciliSinif}`).remove();
-        db.ref(`Eslestirmeler/${seciliSinif}`).remove();
+        db.ref(`Varlik/${seciliSinif}`).remove();  
 
         document.getElementById('view-attendance').classList.add('hidden');
         document.getElementById('view-courses').classList.remove('hidden');
@@ -442,7 +500,7 @@ document.getElementById('btn-end-class').addEventListener('click', () => {
         document.getElementById('page-title').innerText = "Derslerim";
         document.getElementById('page-subtitle').innerText = "Kayıtlı olduğunuz derslerin güncel listesi.";
 
-        if (refEslestirme) refEslestirme.off();
+        if (refVarlik) refVarlik.off();
         dersDurumu = "BEKLEMEDE";
         toast("Ders başarıyla sonlandırıldı.", 'success');
     }
@@ -457,19 +515,23 @@ document.getElementById('btn-export').addEventListener('click', () => {
         return;
     }
 
-    const satirlar = [['Öğrenci No', 'Ad Soyad', 'Nihai Yoklama Durumu', 'Sınıf', 'Ders']];
+    const satirlar = [['Öğrenci No', 'Ad Soyad', 'Katılım Yüzdesi', 'Nihai Durum', 'Sınıf', 'Ders']];
 
     for (let ogrNo in ogrenciHavuzu) {
         const isim = ogrenciHavuzu[ogrNo];
-        const giristeVar = Object.values(girisYapanlarListesi).includes(ogrNo);
-        const cikistaVar = Object.values(cikisYapanlarListesi).includes(ogrNo);
-        const durum = (giristeVar && cikistaVar) ? "VAR" : "YOK";
-        satirlar.push([ogrNo, isim, durum, seciliSinif, aktifDersAd]);
+        const logData = ogrenciLoglari[ogrNo] || { varSayisi: 0 };
+        const yuzde = toplamYoklamaSayisi === 0 ? 0 : Math.round((logData.varSayisi / toplamYoklamaSayisi) * 100);
+
+        const giristeVar = !!girisYapanlarListesi[ogrNo];
+        const cikistaVar = !!cikisYapanlarListesi[ogrNo];
+        const durum = (giristeVar && cikistaVar && yuzde >= 70) ? "VAR" : "YOK";
+        
+        satirlar.push([ogrNo, isim, `%${yuzde}`, durum, seciliSinif, aktifDersAd]);
     }
 
     const wb = XLSX.utils.book_new();
     const ws = XLSX.utils.aoa_to_sheet(satirlar);
-    ws['!cols'] = [{ wch: 15 }, { wch: 25 }, { wch: 20 }, { wch: 10 }, { wch: 35 }];
+    ws['!cols'] = [{ wch: 15 }, { wch: 25 }, { wch: 15 }, { wch: 15 }, { wch: 10 }, { wch: 35 }];
     XLSX.utils.book_append_sheet(wb, ws, "Nihai_Yoklama");
     XLSX.writeFile(wb, `Yoklama_${seciliSinif}_${new Date().toLocaleDateString('tr-TR').replace(/\./g, '-')}.xlsx`);
     toast("Excel raporu indirildi.", 'success');
