@@ -4,6 +4,9 @@
 firebase.initializeApp(firebaseConfig);
 const db = firebase.database();
 
+let anlikVarlikVerisi = {}; 
+let anlikMLVerisi = {}; // YENİ EKLENDİ
+let acikAccordionlar = new Set(); // Açık olan accordion ID'lerini tutar
 let aktifOgretmen = null;
 let aktifDersAd = "";
 let seciliSinif = "";
@@ -12,7 +15,7 @@ let girisYapanlarListesi = {};
 let cikisYapanlarListesi = {};  
 let ogrenciHavuzu = {}; 
 
-let anlikVarlikVerisi = {}; 
+
 let yoklamaZamanlayici = null;
 let toplamYoklamaSayisi = 0;
 let ogrenciLoglari = {}; 
@@ -148,7 +151,15 @@ document.getElementById('btn-close-students').addEventListener('click', () => { 
 
 window.toggleAccordion = function(id) {
     const row = document.getElementById(id);
-    if(row) row.classList.toggle('hidden');
+    if(row) {
+        row.classList.toggle('hidden');
+        // Eğer class'ta hidden yoksa (yani açıldıysa) Set'e ekle, kapandıysa Set'ten çıkar
+        if (!row.classList.contains('hidden')) {
+            acikAccordionlar.add(id);
+        } else {
+            acikAccordionlar.delete(id);
+        }
+    }
 };
 
 // ==========================================================================
@@ -303,6 +314,8 @@ document.getElementById('btn-confirm-start').addEventListener('click', () => {
     });
 });
 
+
+
 // ==========================================================================
 // 8. FİREBASE DİNLEME VE PERİYODİK LOGLAMA
 // ==========================================================================
@@ -310,12 +323,22 @@ let refVarlik = null;
 
 function verileriDinle() {
     if (refVarlik) refVarlik.off();
+    
+    // 1. ML Verilerini Sadece Arka Planda Güncel Tutmak İçin Dinle
+    db.ref(`ML_Tahmin/${seciliSinif}`).on('value', (snap) => {
+        anlikMLVerisi = snap.exists() ? snap.val() : {};
+    });
+
+    // 2. ESP32'den Gelen Varlık Verisini Dinle
     refVarlik = db.ref(`Varlik/${seciliSinif}`);
     refVarlik.on('value', (snap) => {
         anlikVarlikVerisi = snap.exists() ? snap.val() : {};
         
         if (dersDurumu === "CIKIS_ACIK") {
             for (let ogrNo in anlikVarlikVerisi) {
+                // MÜKEMMEL ÇÖZÜM BURASI:
+                // Çıkış yoklamasından atılan biri tekrar bağlanmayı başardıysa (ESP32 onu gördüyse)
+                // ML'in gecikmesini beklemeden ANINDA listeye Onaylandı olarak yaz!
                 if (anlikVarlikVerisi[ogrNo].durum === "SINIFTA") {
                     cikisYapanlarListesi[ogrNo] = ogrNo;
                 }
@@ -367,8 +390,11 @@ function tablolariCiz() {
         
         const bagliGosterim = (dersDurumu === "CIKIS_ACIK") ? true : (anlikVarlikVerisi[ogrNo] && anlikVarlikVerisi[ogrNo].durum === "SINIFTA");
 
+        const accordionID = `acc-${ogrNo}`;
+        const isHidden = acikAccordionlar.has(accordionID) ? '' : 'hidden';
+
         tbodyGiris.innerHTML += `
-            <tr style="cursor: pointer; background: ${bagliGosterim ? 'transparent' : 'rgba(239, 68, 68, 0.1)'}" onclick="toggleAccordion('acc-${ogrNo}')">
+            <tr style="cursor: pointer; background: ${bagliGosterim ? 'transparent' : 'rgba(239, 68, 68, 0.1)'}" onclick="toggleAccordion('${accordionID}')">
                 <td><strong>${ogrNo}</strong></td>
                 <td>
                     ${isim} 
@@ -377,7 +403,7 @@ function tablolariCiz() {
                     </span>
                 </td>
             </tr>
-            <tr id="acc-${ogrNo}" class="hidden" style="background: rgba(0,0,0,0.25);">
+            <tr id="${accordionID}" class="${isHidden}" style="background: rgba(0,0,0,0.25);">
                 <td colspan="2" style="padding: 15px;">
                     <div style="font-size:0.8rem; margin-bottom:10px; color:var(--text-muted); display:flex; justify-content:space-between;">
                         <span><i class="fa-solid fa-microchip"></i> Son MAC: ${anlikMac}</span>
@@ -409,6 +435,7 @@ function tablolariCiz() {
     if (girisSayisi === 0) tbodyGiris.innerHTML = `<tr><td colspan="2" class="empty-state">Bağlantı bekleniyor...</td></tr>`;
     document.getElementById('giris-count').innerText = girisSayisi;
 
+    // TERTEMİZ ÇIKIŞ YOKLAMASI TABLOSU (Kırmızı yazılar tamamen kalktı)
     tbodyCikis.innerHTML = "";
     if (dersDurumu === "GIRIS_ACIK") {
         tbodyCikis.innerHTML = `<tr><td colspan="2" class="empty-state">Çıkış başlamadı.</td></tr>`;
@@ -454,10 +481,10 @@ function tablolariCiz() {
 }
 
 // ==========================================================================
-// 9. ÇIKIŞ YOKLAMASI VE DERSİ BİTİRME (ÇÖZÜM 1)
+// 9. ÇIKIŞ YOKLAMASI VE DERSİ BİTİRME (KUSURSUZ SENARYO)
 // ==========================================================================
 document.getElementById('btn-take-exit-attendance').addEventListener('click', () => {
-    if (confirm("Çıkış yoklaması başlatılacak. ESP32 tüm öğrencileri atacak ve ders boyunca tutulan % kayıtları dondurulacaktır. Öğrencilerin yeniden bağlanması gerekecek. Emin misiniz?")) {
+    if (confirm("Çıkış yoklaması başlatılacak. Dışarıda tespit edilen veya bağlantısı kopan öğrenciler düşürülecek. Emin misiniz?")) {
         dersDurumu = "CIKIS_ACIK";
         
         clearInterval(yoklamaZamanlayici); 
@@ -469,16 +496,27 @@ document.getElementById('btn-take-exit-attendance').addEventListener('click', ()
         badge.className = "status-indicator";
         badge.style.border = "1px solid var(--warning)";
         badge.style.color = "var(--warning)";
-        badge.innerHTML = `<i class="fa-solid fa-rotate"></i> ÇIKIŞ YOKLAMASI BAŞLADI (Bağlantı Bekleniyor)`;
+        badge.innerHTML = `<i class="fa-solid fa-rotate"></i> ÇIKIŞ YOKLAMASI BAŞLADI`;
 
         cikisYapanlarListesi = {};
+        let korunanOgrenciler = {};
 
-        // YENİ EKLENEN KISIM: Firebase Varlık tablosu tamamen temizlenir. 
-        // Böylece eski 'SINIFTA' verisi gider, öğrenciler yeniden bağlanmaya zorlanır.
-        db.ref(`Varlik/${seciliSinif}`).remove().then(() => {
+        // BUTONA BASILDIĞI AN ML'E BAKIYORUZ:
+        // Eğer ML öğrencinin gerçekten içeride olduğunu doğruluyorsa silme, koru.
+        for (let ogrNo in girisYapanlarListesi) {
+            if (anlikVarlikVerisi[ogrNo] && anlikVarlikVerisi[ogrNo].durum === "SINIFTA") {
+                if (anlikMLVerisi[ogrNo] && anlikMLVerisi[ogrNo].sinif_ici === true) {
+                    cikisYapanlarListesi[ogrNo] = ogrNo;
+                    korunanOgrenciler[ogrNo] = anlikVarlikVerisi[ogrNo]; // Onaylıyı tut
+                }
+            }
+        }
+
+        // Firebase'i güncelle: ML'in "Dışarıda" dediği herkes (veya bağlantısı kopanlar) tamamen silinir.
+        db.ref(`Varlik/${seciliSinif}`).set(korunanOgrenciler).then(() => {
             db.ref(`Sistem/${seciliSinif}`).update({ durum: "CIKIS" });
             tablolariCiz();
-            toast("Çıkış yoklaması başladı. Öğrenciler cihazlardan düşürüldü, tekrar bağlanmaları bekleniyor.", 'info');
+            toast("Çıkış yoklaması başladı. Sınıftakiler onaylandı, dışarıdakiler/kopanlar düşürüldü.", 'info');
         });
     }
 });
