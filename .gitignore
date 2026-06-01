@@ -7,6 +7,7 @@ firebase_config.json
 # ESP32 hassas ayarlar
 esp32/main/config.h
 web/config.js
+ml/veri_topla/veri_topla/firebase_kimlik
 
 # Python
 ml/__pycache__/
