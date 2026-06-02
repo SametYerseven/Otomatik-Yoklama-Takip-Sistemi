@@ -324,27 +324,47 @@ let refVarlik = null;
 function verileriDinle() {
     if (refVarlik) refVarlik.off();
     
-    // 1. ML Verilerini Sadece Arka Planda Güncel Tutmak İçin Dinle
     db.ref(`ML_Tahmin/${seciliSinif}`).on('value', (snap) => {
         anlikMLVerisi = snap.exists() ? snap.val() : {};
     });
 
-    // 2. ESP32'den Gelen Varlık Verisini Dinle
     refVarlik = db.ref(`Varlik/${seciliSinif}`);
     refVarlik.on('value', (snap) => {
         anlikVarlikVerisi = snap.exists() ? snap.val() : {};
         
         if (dersDurumu === "CIKIS_ACIK") {
             for (let ogrNo in anlikVarlikVerisi) {
-                // MÜKEMMEL ÇÖZÜM BURASI:
-                // Çıkış yoklamasından atılan biri tekrar bağlanmayı başardıysa (ESP32 onu gördüyse)
-                // ML'in gecikmesini beklemeden ANINDA listeye Onaylandı olarak yaz!
                 if (anlikVarlikVerisi[ogrNo].durum === "SINIFTA") {
                     cikisYapanlarListesi[ogrNo] = ogrNo;
                 }
             }
         }
         tablolariCiz(); 
+    });
+
+    // RFID listener artık burada — seciliSinif artık dolu
+    db.ref(`Sistem/${seciliSinif}/SonOkunanKart`).on('value', (snap) => {
+        if (snap.exists() && rfidAktif && dersDurumu !== "BEKLEMEDE") {
+            const uid = snap.val();
+            
+            db.ref(`RFID_Kartlar/${uid}`).once('value', (kartSnap) => {
+                if (kartSnap.exists()) {
+                    const kayitliOgrNo = String(kartSnap.val());
+                    ogrenciManuelEkle(kayitliOgrNo);
+                    
+                    if (dersDurumu === "CIKIS_ACIK") {
+                        cikisYapanlarListesi[kayitliOgrNo] = kayitliOgrNo;
+                        tablolariCiz();
+                    }
+                    
+                    toast(`💳 ${kayitliOgrNo} numaralı öğrenci RFID ile onaylandı!`, "success");
+                } else {
+                    toast(`⚠️ Okunan Kart (${uid}) sistemde kayıtlı değil!`, "danger");
+                }
+                
+                db.ref(`Sistem/${seciliSinif}/SonOkunanKart`).remove();
+            });
+        }
     });
 }
 
@@ -574,3 +594,32 @@ document.getElementById('btn-export').addEventListener('click', () => {
     XLSX.writeFile(wb, `Yoklama_${seciliSinif}_${new Date().toLocaleDateString('tr-TR').replace(/\./g, '-')}.xlsx`);
     toast("Excel raporu indirildi.", 'success');
 });
+
+// ==========================================================================
+// 11. RFID KONTROL VE YOKLAMA İŞLEME SİSTEMİ (ÖNCEDEN KAYITLI KARTLAR)
+// ==========================================================================
+let rfidAktif = false;
+
+document.getElementById('btn-toggle-rfid').addEventListener('click', () => {
+    if (dersDurumu === "BEKLEMEDE") {
+        toast("RFID okuyucuyu açmak için önce bir ders başlatmalısınız!", "warning");
+        return;
+    }
+    
+    rfidAktif = !rfidAktif;
+    const btn = document.getElementById('btn-toggle-rfid');
+
+    // ESP32'ye Firebase üzerinden "Okuyucuyu Aç/Kapat" emri gönderiyoruz
+    db.ref(`Sistem/${seciliSinif}/rfid_izin`).set(rfidAktif).then(() => {
+        if(rfidAktif) {
+            btn.innerHTML = `<i class="fa-solid fa-wifi"></i> Kart Okutma: AÇIK`;
+            btn.style.backgroundColor = "var(--success)";
+            toast("RFID Aktif: Öğrenciler giriş veya çıkış için kart okutabilir.", "success");
+        } else {
+            btn.innerHTML = `<i class="fa-solid fa-id-card"></i> Kart Okutma: KAPALI`;
+            btn.style.backgroundColor = "var(--warning)";
+            toast("RFID Okuyucu kapatıldı.", "info");
+        }
+    });
+});
+
