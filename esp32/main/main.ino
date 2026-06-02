@@ -5,12 +5,16 @@
 #include <BLEUtils.h>
 #include <BLEScan.h>
 #include <BLEAdvertisedDevice.h>
-#include <esp_gap_ble_api.h> // YENİ: Sinyal gücünü (RSSI) donanımsal okumak için eklendi
+#include <esp_gap_ble_api.h>
 #include <vector>
 #include <queue>
 #include "config.h"
 #include "addons/TokenHelper.h"
 #include "addons/RTDBHelper.h"
+
+// YENİ EKLENEN: RFID Kütüphaneleri
+#include <SPI.h>
+#include <MFRC522.h>
 
 // ---- BU KARTIN BULUNDUĞU FİZİKSEL SINIFI BURAYA YAZIYORSUN ----
 #define BU_SINIF_NO "203"
@@ -24,13 +28,19 @@
 #define PIN_MAVI    27
 #define PIN_BUZZER  13
 
+// YENİ EKLENEN: RFID Pinleri ve Tanımlamaları
+#define SS_PIN  5
+#define RST_PIN 22
+MFRC522 rfid(SS_PIN, RST_PIN);
+bool rfidIzin = false; // Firebase'den gelecek izin durumu
+
 // --- TEKİL VE GÜÇLÜ FIREBASE KUYRUĞU ---
 struct FirebaseGorev {
     uint16_t connId;
     String ogrenciNo;
     String durum;
     String macAdresi;
-    int rssi; // YENİ: Öğrencinin anlık sinyal gücünü Firebase'e taşımak için eklendi
+    int rssi;
 };
 std::queue<FirebaseGorev> firebaseKuyrugu;
 
@@ -60,16 +70,12 @@ void rgbAyarla(bool k, bool y, bool m) {
     digitalWrite(PIN_MAVI,    m);
 }
 
-// YENİ: Sinyal gücünü geçici olarak tutacağımız global değişken
 int sonOkunanRssi = -99; 
 
-// YENİ: ESP32'nin donanımsal Bluetooth olaylarını (Event) yakalayan fonksiyon
-// YENİ: Donanımsal Olay Yakalayıcı (Otomatik RSSI Güncelleyici)
 static void my_gap_event_handler(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_param_t *param) {
     if (event == ESP_GAP_BLE_READ_RSSI_COMPLETE_EVT) {
         int anlikRssi = param->read_rssi_cmpl.rssi;
         
-        // Bu sinyalin hangi MAC adresinden geldiğini bul
         char macStr[18];
         sprintf(macStr, "%02x:%02x:%02x:%02x:%02x:%02x",
                 param->read_rssi_cmpl.remote_addr[0], param->read_rssi_cmpl.remote_addr[1],
@@ -78,7 +84,6 @@ static void my_gap_event_handler(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_pa
         
         String okunanMac = String(macStr);
 
-        // Aktif bağlantılardan bu kişiyi bul ve anlık RSSI'ını Firebase kuyruğuna at
         for (auto& bag : aktifBaglantilar) {
             if (bag.macAdresi == okunanMac && bag.tescilEdildi) {
                 firebaseKuyrugu.push({bag.connId, bag.ogrenciNo, "SINIFTA", bag.macAdresi, anlikRssi});
@@ -88,9 +93,6 @@ static void my_gap_event_handler(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_pa
     }
 }
 
-// =======================================================
-// BLE SUNUCU GERİ ÇAĞIRMALARI
-// =======================================================
 class MyServerCallbacks : public BLEServerCallbacks {
     void onConnect(BLEServer* pServer, esp_ble_gatts_cb_param_t* param) {
         uint16_t connId = param->connect.conn_id;
@@ -108,7 +110,6 @@ class MyServerCallbacks : public BLEServerCallbacks {
         reklamTetikle = true; 
         Serial.println("[BLE] Cihaz bağlandı. MAC: " + String(remoteMac));
 
-        // YENİ: Cihaz bağlandığı an, ESP32 çipine sinyal gücünü ölçmesi için emir veriyoruz!
         esp_ble_gap_read_rssi(param->connect.remote_bda);
     }
 
@@ -119,7 +120,6 @@ class MyServerCallbacks : public BLEServerCallbacks {
             if (it->connId == connId) {
                 if (it->ogrenciNo != "") {
                     if (aktifDersDurumu != "CIKIS") {
-                        // Çıkışta değilken koparsa, RSSI olarak 0 gönderiyoruz (Koptu anlamında)
                         firebaseKuyrugu.push({it->connId, it->ogrenciNo, "AYRILDI", it->macAdresi, 0});
                     }
                 }
@@ -132,9 +132,6 @@ class MyServerCallbacks : public BLEServerCallbacks {
     }
 };
 
-// =======================================================
-// KARAKTERİSTİK YAZMA (Öğrenci Numarası Geldiğinde)
-// =======================================================
 class MyCharacteristicCallbacks : public BLECharacteristicCallbacks {
     void onWrite(BLECharacteristic* pCharacteristic) {
         String ogrenciNo = pCharacteristic->getValue();
@@ -148,7 +145,6 @@ class MyCharacteristicCallbacks : public BLECharacteristicCallbacks {
                 bag.ogrenciNo = ogrenciNo;
                 bag.tescilEdildi = true;
                 
-                // YENİ: Öğrenci numarasını Firebase'e yollarken "sonOkunanRssi" değerini de ekliyoruz
                 firebaseKuyrugu.push({bag.connId, ogrenciNo, "SINIFTA", bag.macAdresi, sonOkunanRssi});
                 eslesti = true;
                 break;
@@ -169,9 +165,6 @@ class MyCharacteristicCallbacks : public BLECharacteristicCallbacks {
     }
 };
 
-// =======================================================
-// SETUP 
-// =======================================================
 void setup() {
     Serial.begin(115200);
     pinMode(PIN_KIRMIZI, OUTPUT);
@@ -180,10 +173,18 @@ void setup() {
     pinMode(PIN_BUZZER,  OUTPUT);
     rgbAyarla(LOW, LOW, LOW);
 
+    // 1. Wi-Fi'ye Bağlanırken: MAVİ LED yanar, 1 Kısa Bip
+    rgbAyarla(LOW, LOW, HIGH); 
+    tone(PIN_BUZZER, 1000); delay(150); noTone(PIN_BUZZER);
+    
     WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
     while (WiFi.status() != WL_CONNECTED) { delay(300); Serial.print("."); }
     Serial.println("\nWi-Fi Başarılı!");
 
+    // 2. Firebase'e Bağlanırken: KIRMIZI LED yanar, 1 Kısa Bip
+    rgbAyarla(HIGH, LOW, LOW); 
+    tone(PIN_BUZZER, 1000); delay(150); noTone(PIN_BUZZER);
+    
     config_firebase.api_key      = API_KEY;
     config_firebase.database_url = DATABASE_URL;
     Firebase.signUp(&config_firebase, &auth, "", "");
@@ -191,9 +192,11 @@ void setup() {
     Firebase.reconnectWiFi(true);
     Serial.println("Firebase Hazır!");
 
-    // YENİ: GAP (Generic Access Profile) Olay Dinleyicisini sisteme tanıtıyoruz
-    BLEDevice::setCustomGapHandler(my_gap_event_handler);
+    // YENİ EKLENEN: SPI ve RFID modülünü başlat
+    SPI.begin();
+    rfid.PCD_Init();
 
+    BLEDevice::setCustomGapHandler(my_gap_event_handler);
     BLEDevice::init(bleCihazAdi.c_str());
     BLEDevice::setMTU(23);
 
@@ -213,17 +216,21 @@ void setup() {
     pAdv->setScanResponse(true);
     BLEDevice::startAdvertising();
 
+    // 3. Her Şey Başarılı: YEŞİL LED yanar, 2.5 Saniyelik Uzun Bip
+    rgbAyarla(LOW, HIGH, LOW); 
+    tone(PIN_BUZZER, 1000); delay(2500); noTone(PIN_BUZZER);
+
     Serial.println("Sistem Hazır: " + bleCihazAdi);
 }
 
-// =======================================================
-// LOOP (ANA DÖNGÜ)
-// =======================================================
 void loop() {
     static unsigned long sonDurumKontrol = 0;
+    
+    // Her 3 saniyede bir Firebase'den Sistem durumunu ve RFID İznini kontrol et
     if (millis() - sonDurumKontrol > 3000) {
         sonDurumKontrol = millis();
         String sistemPath = "/Sistem/" + String(BU_SINIF_NO) + "/durum";
+        String rfidIzinPath = "/Sistem/" + String(BU_SINIF_NO) + "/rfid_izin";
         
         if (Firebase.RTDB.getString(&fbdo, sistemPath)) {
             String yeniDurum = fbdo.stringData();
@@ -235,17 +242,46 @@ void loop() {
             }
             aktifDersDurumu = yeniDurum;
         }
+
+        // YENİ EKLENEN: Web arayüzünden RFID izni gelmiş mi bakıyoruz
+        if (Firebase.RTDB.getBool(&fbdo, rfidIzinPath)) {
+            rfidIzin = fbdo.boolData();
+        } else {
+            rfidIzin = false;
+        }
+    }
+
+    // YENİ EKLENEN: Eğer hoca izin verdiyse kart okumayı aktifleştir
+    if (rfidIzin) {
+        if (rfid.PICC_IsNewCardPresent() && rfid.PICC_ReadCardSerial()) {
+            String uidString = "";
+            for (byte i = 0; i < rfid.uid.size; i++) {
+                uidString += String(rfid.uid.uidByte[i] < 0x10 ? "0" : "");
+                uidString += String(rfid.uid.uidByte[i], HEX);
+            }
+            uidString.toUpperCase();
+
+            // Kart okundu! İki kısa başarılı bip sesi ver.
+            tone(PIN_BUZZER, 1500); delay(100); noTone(PIN_BUZZER); delay(100);
+            tone(PIN_BUZZER, 1500); delay(100); noTone(PIN_BUZZER);
+            
+            // Okunan kartın ID'sini hocanın ekranına düşmesi için Firebase'e yolla
+            String okunanPath = "/Sistem/" + String(BU_SINIF_NO) + "/SonOkunanKart";
+            Firebase.RTDB.setString(&fbdo, okunanPath, uidString);
+            
+            Serial.println("[RFID] Kart Okundu: " + uidString);
+            
+            rfid.PICC_HaltA(); // Aynı kartı peş peşe defalarca okumasını engeller
+        }
     }
 
     if (reklamTetikle && (aktifDersDurumu == "AKTIF" || aktifDersDurumu == "CIKIS")) {
         reklamTetikle = false;
         delay(100);
         BLEDevice::startAdvertising(); 
-        if (aktifBaglantilar.size() > 0) rgbAyarla(LOW, HIGH, LOW); 
-        else rgbAyarla(LOW, LOW, LOW);
+        rgbAyarla(LOW, HIGH, LOW); 
     }
 
-    // YENİ: Her 2 saniyede bir bağlı olan herkesin sinyal gücünü (RSSI) donanımdan iste
     static unsigned long sonRssiIstegi = 0;
     if (millis() - sonRssiIstegi > 2000) {
         sonRssiIstegi = millis();
@@ -253,13 +289,12 @@ void loop() {
             if (bag.tescilEdildi) {
                  esp_bd_addr_t bda;
                  sscanf(bag.macAdresi.c_str(), "%hhx:%hhx:%hhx:%hhx:%hhx:%hhx", 
-                        &bda[0], &bda[1], &bda[2], &bda[3], &bda[4], &bda[5]);
+                         &bda[0], &bda[1], &bda[2], &bda[3], &bda[4], &bda[5]);
                  esp_ble_gap_read_rssi(bda);
             }
         }
     }
 
-    // JSON Formatında Firebase Güncellemesi
     if (!firebaseKuyrugu.empty()) {
         FirebaseGorev gorev = firebaseKuyrugu.front();
         firebaseKuyrugu.pop();
@@ -274,7 +309,6 @@ void loop() {
         }
 
         if (Firebase.RTDB.setJSON(&fbdo, dbPath, &json)) {
-            // Log ekranını çok doldurmamak için sadece durumu değişenleri (veya ilk girişi) sesli uyar
             static String sonLoglananNo = "";
             if (gorev.ogrenciNo != sonLoglananNo) {
                  Serial.println("[Firebase] Girdi/Çıktı Güncellendi: " + gorev.ogrenciNo);
