@@ -1,0 +1,13 @@
+{
+  "type": "service_account",
+  "project_id": "otomatik-yoklama-takip-sistemi",
+  "private_key_id": "dce106076fdc90dada88e0e0d8a754f551748acd",
+  "private_key": "-----BEGIN PRIVATE KEY-----\nMIIEvwIBADANBgkqhkiG9w0BAQEFAASCBKkwggSlAgEAAoIBAQC6V7a/yvMxXjjS\nawIev2KJpaCzt0Dgm+S1fdDMv2lQl8YwQl37ggi4AYzs0HSxPaknk2xnHbNqucWp\nvPNMuLuc0CYrQxQM2s+VmkxSGfWCeL4KNH0YURZ8W1oGxR0eJPPVIkchhDszPyfs\n2aMkRnEOUdSaCcawbwsMBc0VHEkJ9ChfIltDoKG1DaFXHYibhAQ4dpN/ymgnU9Ll\nFZaiMXJ/H0RWeFaqDV021bAa7YiFwfjtWi8PZktyvhWs5jvJFeh3i0NtKinFxy1c\nhY7MyXIwVQsp/Bb32spTz70IW5alYEq+cAsrl23UwSqhkIx3qSqQaQLyyPsgyCBn\nXL3YAFRPAgMBAAECggEAChzchB1wLqEIaxL3ndI7zMXk/3ErNNqrrNXT0RN06bTI\nQrI3W4DmbDtZTzjOPG2Lko7uS8z8LFyXR5ZDi0mzP4K5r5CyXog5dSBXPVVp/NdZ\n/j/Jp4TZuDdU9BfFHsUD8/B/n71ctnPvp2ugQ5sMY6nj5IAx/Ofp15CGXWZC6Hv0\nfhmzsePnP50h+wK0K6Cg1e02YN4wgwC5WzUlbzoeF3gX9KefSSmN+TRcxE5slG4c\nVSI7OEubdGqXZ5F+VlohfVPCX4MlLycjrsSqaL0wQt/YDewaPUIhClS6SemYS6Gb\nYLZpIgSohqpI7u6bVCjeA3dhJy411Va4emfl2DTFUQKBgQDxvcQOW60nfRRmed72\nUPpVjmrDGRCnMM5RbeCWOdmQEKYYs/eflQobK4u2YBkSXdcHJh5PjQL5TecoNpJa\nq/DrcPSl74WEQOnSyTJMSD8VxpxvOPoCopMtPm/+IAuRxzp1FuwaQD5eboDlUPVL\nU4dZeJZhcRKOOGBtk1s93qI24wKBgQDFVXEsWoUshIe6A6GTUq+OnklPE25FH7Md\nFgBQ2gEIXpOzFy9J9KiIVeGofbUQRS/YEI/3IMZhQepHR1Vr8hF4Sk0frbX3jUln\nZOYOpAwvNOHPNMy1XmsZ3AApuVf4NRqIkUP8+w3UFzWZWFEx3+5pkL2d6l2gz+SR\nluTVtz98pQKBgQCveaRbF8j1JSIt0ME740QT3rE4tXUVJ6RcD3o7EfsPTEaFH/3b\nZQBVAKMF23PXlS6FDfJqpF1IQnhNBG/wSWc0QGYWHWu5uLUCQPG11auVTvo28hDo\n4MIc0XnR6cj8JLYWUHFKDOA5A9Wkn8Ouzg8trw7Z5I4nllzIrXJJ0tXFKQKBgQC6\nUDqjiu/UIWlYqpcCVv5kZHSI0aq6XvypCJ3RuJNjCJDhdZFzfSkmWBfQEqhCrWBH\n2xNiXDKRnz+IfwRa/9mYvmZk84ksKtzUX0KLLj5Gz+In1g01bOkoKDyLKHCza8ga\nizUrBQqAZk139BftRCWAzGULVT2DWOXQxCxY0ESD9QKBgQDPhsYOmBmflFE3hCKM\nhRYtVUATuq+wyjeFkhuJgrQHpoLRKlJHCa4NT3I2c3U2E3jKc/E21FONtfo6b1aS\nNB7SYerzMssSOcMAxmWoCd0VDq8jQPTLd7s4zPuLGXdylNq2hPw8GQkhraCrmgUu\nthY4rgZoFX3chcVU2kCEi7XELQ==\n-----END PRIVATE KEY-----\n",
+  "client_email": "firebase-adminsdk-fbsvc@otomatik-yoklama-takip-sistemi.iam.gserviceaccount.com",
+  "client_id": "118256551182889820041",
+  "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+  "token_uri": "https://oauth2.googleapis.com/token",
+  "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
+  "client_x509_cert_url": "https://www.googleapis.com/robot/v1/metadata/x509/firebase-adminsdk-fbsvc%40otomatik-yoklama-takip-sistemi.iam.gserviceaccount.com",
+  "universe_domain": "googleapis.com"
+}
