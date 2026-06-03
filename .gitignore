@@ -1,21 +1,51 @@
-# Firebase kimlik bilgileri — ASLA yükleme!
+# ==========================================
+# GİZLİ KİMLİK DOSYALARI
+# ==========================================
+firebase_kimlik.json
+**/firebase_kimlik.json
 google-services.json
-GoogleService-Info.plist
-firebase_config.json
 .env
+.env.*
 
-# ESP32 hassas ayarlar
-esp32/main/config.h
-web/config.js
-ml/veri_topla/veri_topla/firebase_kimlik
+# ==========================================
+# ESP32 HASSAS AYARLAR
+# ==========================================
+config.h
+**/config.h
 
-# Python
-ml/__pycache__/
-ml/*.pyc
-ml/venv/
-ml/.env
+# ==========================================
+# WEB HASSAS AYARLAR
+# ==========================================
+config.js
+**/config.js
 
-# IDE
+# ==========================================
+# ML - MODELİ VE VERİYİ KORU
+# ==========================================
+*.pkl
+*.csv
+rssi_veri_seti.csv
+
+# ==========================================
+# PYTHON
+# ==========================================
+__pycache__/
+*.pyc
+*.pyo
+venv/
+.venv/
+
+# ==========================================
+# IDE & SİSTEM
+# ==========================================
 .vscode/
 .idea/
 *.swp
+.DS_Store
+Thumbs.db
+
+# ==========================================
+# ÇIKTI DOSYALARI
+# ==========================================
+*.png
+rssi_analiz.png
