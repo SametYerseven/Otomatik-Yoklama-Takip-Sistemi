@@ -12,7 +12,6 @@
 #include "addons/TokenHelper.h"
 #include "addons/RTDBHelper.h"
 
-// YENİ EKLENEN: RFID Kütüphaneleri
 #include <SPI.h>
 #include <MFRC522.h>
 
@@ -28,13 +27,11 @@
 #define PIN_MAVI    27
 #define PIN_BUZZER  13
 
-// YENİ EKLENEN: RFID Pinleri ve Tanımlamaları
 #define SS_PIN  5
 #define RST_PIN 22
 MFRC522 rfid(SS_PIN, RST_PIN);
-bool rfidIzin = false; // Firebase'den gelecek izin durumu
+bool rfidIzin = false;
 
-// --- TEKİL VE GÜÇLÜ FIREBASE KUYRUĞU ---
 struct FirebaseGorev {
     uint16_t connId;
     String ogrenciNo;
@@ -44,7 +41,6 @@ struct FirebaseGorev {
 };
 std::queue<FirebaseGorev> firebaseKuyrugu;
 
-// --- BAĞLANTI TAKİP YAPISI ---
 struct OgrenciBaglanti {
     uint16_t connId;
     String ogrenciNo;
@@ -68,6 +64,17 @@ void rgbAyarla(bool k, bool y, bool m) {
     digitalWrite(PIN_KIRMIZI, k);
     digitalWrite(PIN_YESIL,   y);
     digitalWrite(PIN_MAVI,    m);
+}
+
+// KAYBOLAN BUZZER DÜZELTMESİ EKLENDİ
+void bipCikar(int sureMs) {
+    unsigned long baslangic = millis();
+    while (millis() - baslangic < sureMs) {
+        digitalWrite(PIN_BUZZER, HIGH);
+        delayMicroseconds(500);
+        digitalWrite(PIN_BUZZER, LOW);
+        delayMicroseconds(500);
+    }
 }
 
 int sonOkunanRssi = -99; 
@@ -175,7 +182,7 @@ void setup() {
 
     // 1. Wi-Fi'ye Bağlanırken: MAVİ LED yanar, 1 Kısa Bip
     rgbAyarla(LOW, LOW, HIGH); 
-    tone(PIN_BUZZER, 1000); delay(150); noTone(PIN_BUZZER);
+    bipCikar(150); // KAYBOLAN BUZZER DÜZELTMESİ EKLENDİ
     
     WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
     while (WiFi.status() != WL_CONNECTED) { delay(300); Serial.print("."); }
@@ -183,7 +190,7 @@ void setup() {
 
     // 2. Firebase'e Bağlanırken: KIRMIZI LED yanar, 1 Kısa Bip
     rgbAyarla(HIGH, LOW, LOW); 
-    tone(PIN_BUZZER, 1000); delay(150); noTone(PIN_BUZZER);
+    bipCikar(150); // KAYBOLAN BUZZER DÜZELTMESİ EKLENDİ
     
     config_firebase.api_key      = API_KEY;
     config_firebase.database_url = DATABASE_URL;
@@ -192,7 +199,6 @@ void setup() {
     Firebase.reconnectWiFi(true);
     Serial.println("Firebase Hazır!");
 
-    // YENİ EKLENEN: SPI ve RFID modülünü başlat
     SPI.begin();
     rfid.PCD_Init();
 
@@ -218,7 +224,7 @@ void setup() {
 
     // 3. Her Şey Başarılı: YEŞİL LED yanar, 2.5 Saniyelik Uzun Bip
     rgbAyarla(LOW, HIGH, LOW); 
-    tone(PIN_BUZZER, 1000); delay(2500); noTone(PIN_BUZZER);
+    bipCikar(2500); // KAYBOLAN BUZZER DÜZELTMESİ EKLENDİ
 
     Serial.println("Sistem Hazır: " + bleCihazAdi);
 }
@@ -226,7 +232,6 @@ void setup() {
 void loop() {
     static unsigned long sonDurumKontrol = 0;
     
-    // Her 3 saniyede bir Firebase'den Sistem durumunu ve RFID İznini kontrol et
     if (millis() - sonDurumKontrol > 3000) {
         sonDurumKontrol = millis();
         String sistemPath = "/Sistem/" + String(BU_SINIF_NO) + "/durum";
@@ -243,7 +248,6 @@ void loop() {
             aktifDersDurumu = yeniDurum;
         }
 
-        // YENİ EKLENEN: Web arayüzünden RFID izni gelmiş mi bakıyoruz
         if (Firebase.RTDB.getBool(&fbdo, rfidIzinPath)) {
             rfidIzin = fbdo.boolData();
         } else {
@@ -251,27 +255,26 @@ void loop() {
         }
     }
 
-    // YENİ EKLENEN: Eğer hoca izin verdiyse kart okumayı aktifleştir
     if (rfidIzin) {
         if (rfid.PICC_IsNewCardPresent() && rfid.PICC_ReadCardSerial()) {
             String uidString = "";
-            for (byte i = 0; i < rfid.uid.size; i++) {
-                uidString += String(rfid.uid.uidByte[i] < 0x10 ? "0" : "");
-                uidString += String(rfid.uid.uidByte[i], HEX);
-            }
-            uidString.toUpperCase();
-
-            // Kart okundu! İki kısa başarılı bip sesi ver.
-            tone(PIN_BUZZER, 1500); delay(100); noTone(PIN_BUZZER); delay(100);
-            tone(PIN_BUZZER, 1500); delay(100); noTone(PIN_BUZZER);
             
-            // Okunan kartın ID'sini hocanın ekranına düşmesi için Firebase'e yolla
+            // KAYBOLAN BÜYÜK/KÜÇÜK HARF (UID) DÜZELTMESİ EKLENDİ
+            for (byte i = 0; i < rfid.uid.size; i++) {
+                char buffer[3];
+                sprintf(buffer, "%02X", rfid.uid.uidByte[i]);
+                uidString += String(buffer);
+            }
+            uidString.trim();
+
+            bipCikar(100); delay(100); bipCikar(100); // KAYBOLAN BUZZER DÜZELTMESİ EKLENDİ
+            
             String okunanPath = "/Sistem/" + String(BU_SINIF_NO) + "/SonOkunanKart";
             Firebase.RTDB.setString(&fbdo, okunanPath, uidString);
             
             Serial.println("[RFID] Kart Okundu: " + uidString);
             
-            rfid.PICC_HaltA(); // Aynı kartı peş peşe defalarca okumasını engeller
+            rfid.PICC_HaltA(); 
         }
     }
 
