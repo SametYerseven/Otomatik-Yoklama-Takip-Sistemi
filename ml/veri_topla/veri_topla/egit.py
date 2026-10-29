@@ -24,10 +24,10 @@ print(f"  Koridor  (0): {len(df[df['Sinif_Ici_Mi'] == 0])}")
 # ==========================================================
 print("\n[2/5] Moving Average filtresi uygulanıyor...")
 
-pencere = 5  # Son 5 ölçümün ortalaması
-df["RSSI_MA"] = df["RSSI"].rolling(window=pencere, min_periods=1).mean()
+window = 5  # Son 5 ölçümün ortalaması
+df["RSSI_MA"] = df["RSSI"].rolling(window=window, min_periods=1).mean()
 
-print(f"  Pencere boyutu: {pencere}")
+print(f"  Pencere boyutu: {window}")
 print(f"  Ham RSSI      → Ort: {df['RSSI'].mean():.1f} dBm | Std: {df['RSSI'].std():.1f}")
 print(f"  Filtreli RSSI → Ort: {df['RSSI_MA'].mean():.1f} dBm | Std: {df['RSSI_MA'].std():.1f}")
 
@@ -36,29 +36,29 @@ print(f"  Filtreli RSSI → Ort: {df['RSSI_MA'].mean():.1f} dBm | Std: {df['RSSI
 # ==========================================================
 print("\n[3/5] Kalman Filtresi uygulanıyor...")
 
-def kalman_filtrele(olcumler, Q=0.01, R=2.0):
+def kalman_filter(measurements, Q=0.01, R=2.0):
     """
     Q = Süreç gürültüsü (düşük = daha pürüzsüz)
     R = Ölçüm gürültüsü (yüksek = ölçüme daha az güven)
     """
-    n = len(olcumler)
-    tahmin = np.zeros(n)
+    n = len(measurements)
+    estimates = np.zeros(n)
     
-    x = olcumler[0]   # Başlangıç tahmini
+    x = measurements[0]   # Başlangıç tahmini
     P = 1.0           # Başlangıç hatası
     
-    for i, z in enumerate(olcumler):
+    for i, z in enumerate(measurements):
         # Tahmin adımı
         P = P + Q
         # Güncelleme adımı
         K = P / (P + R)          # Kalman kazancı
         x = x + K * (z - x)     # Tahmini güncelle
         P = (1 - K) * P          # Hata kovaryansını güncelle
-        tahmin[i] = x
+        estimates[i] = x
     
-    return tahmin
+    return estimates
 
-df["RSSI_Kalman"] = kalman_filtrele(df["RSSI"].values)
+df["RSSI_Kalman"] = kalman_filter(df["RSSI"].values)
 
 print(f"  Kalman RSSI → Ort: {df['RSSI_Kalman'].mean():.1f} dBm | Std: {df['RSSI_Kalman'].std():.1f}")
 
@@ -90,11 +90,11 @@ model.fit(X_train, y_train)
 print("\n[5/5] Sonuçlar hesaplanıyor...")
 
 y_pred = model.predict(X_test)
-dogruluk = accuracy_score(y_test, y_pred)
+accuracy = accuracy_score(y_test, y_pred)
 cm = confusion_matrix(y_test, y_pred)
 
 print("\n" + "=" * 50)
-print(f"  MODEL DOĞRULUĞU: %{dogruluk * 100:.1f}")
+print(f"  MODEL DOĞRULUĞU: %{accuracy * 100:.1f}")
 print("=" * 50)
 print("\nKarışıklık Matrisi:")
 print(f"  Gerçek KORİDOR - Tahmin KORİDOR : {cm[0][0]} ✓")
@@ -108,11 +108,11 @@ print(classification_report(y_test, y_pred,
 
 # Özellik önem sıralaması
 print("Özellik Önem Sıralaması:")
-ozellikler = ["Ham RSSI", "Moving Average", "Kalman"]
-for isim, onem in sorted(zip(ozellikler, model.feature_importances_),
+features = ["Ham RSSI", "Moving Average", "Kalman"]
+for name, importance in sorted(zip(features, model.feature_importances_),
                           key=lambda x: x[1], reverse=True):
-    bar = "█" * int(onem * 30)
-    print(f"  {isim:<18}: {bar} {onem*100:.1f}%")
+    bar = "█" * int(importance * 30)
+    print(f"  {name:<18}: {bar} {importance*100:.1f}%")
 
 # ==========================================================
 # 6. MODELİ KAYDET
@@ -122,7 +122,7 @@ with open("model.pkl", "wb") as f:
         "model": model,
         "kalman_Q": 0.01,
         "kalman_R": 2.0,
-        "ma_pencere": pencere
+        "ma_pencere": window
     }, f)
 
 print("\n✓ Model 'model.pkl' olarak kaydedildi.")
@@ -130,8 +130,8 @@ print("\n✓ Model 'model.pkl' olarak kaydedildi.")
 # ==========================================================
 # 7. GRAFİK — İsteğe bağlı
 # ==========================================================
-cevap = input("\nGrafik gösterilsin mi? (e/h): ").strip().lower()
-if cevap == "e":
+answer = input("\nGrafik gösterilsin mi? (e/h): ").strip().lower()
+if answer == "e":
     fig, axes = plt.subplots(2, 1, figsize=(14, 8))
     fig.suptitle("MCBÜ - RSSI Sinyal Analizi", fontsize=14, fontweight='bold')
 

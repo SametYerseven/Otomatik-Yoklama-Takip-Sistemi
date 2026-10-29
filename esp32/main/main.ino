@@ -17,64 +17,64 @@
 #include <MFRC522.h>
 
 // ---- BU KARTIN BULUNDUĞU FİZİKSEL SINIFI BURAYA YAZIYORSUN ----
-#define BU_SINIF_NO "203"
+#define THIS_CLASSROOM_NO "203"
 // ---------------------------------------------------------------
 
 #define SERVICE_UUID        "4fafc201-1fb5-459e-8fcc-c5c9c331914b"
 #define CHARACTERISTIC_UUID "beb5483e-36e1-4688-b7f5-ea07361b26a8"
 
-#define PIN_KIRMIZI 25
-#define PIN_YESIL   26
-#define PIN_MAVI    27
+#define PIN_RED     25
+#define PIN_GREEN   26
+#define PIN_BLUE    27
 #define PIN_BUZZER  13
 
 // YENİ EKLENEN: RFID Pinleri ve Tanımlamaları
 #define SS_PIN  5
 #define RST_PIN 22
 MFRC522 rfid(SS_PIN, RST_PIN);
-bool rfidIzin = false; // Firebase'den gelecek izin durumu
+bool rfidPermission = false; // Firebase'den gelecek izin durumu
 
 // --- TEKİL VE GÜÇLÜ FIREBASE KUYRUĞU ---
-struct FirebaseGorev {
+struct FirebaseTask {
     uint16_t connId;
-    String ogrenciNo;
-    String durum;
-    String macAdresi;
+    String studentNo;
+    String status;
+    String macAddress;
     int rssi;
 };
-std::queue<FirebaseGorev> firebaseKuyrugu;
+std::queue<FirebaseTask> firebaseQueue;
 
 // --- BAĞLANTI TAKİP YAPISI ---
-struct OgrenciBaglanti {
+struct StudentConnection {
     uint16_t connId;
-    String ogrenciNo;
-    String macAdresi; 
-    bool tescilEdildi;
+    String studentNo;
+    String macAddress; 
+    bool isRegistered;
 };
 
-std::vector<OgrenciBaglanti> aktifBaglantilar;
-uint16_t sonGelenConnId = 0;
-bool reklamTetikle = false;
+std::vector<StudentConnection> activeConnections;
+uint16_t lastConnId = 0;
+bool triggerAdvertising = false;
 
 FirebaseData   fbdo;
 FirebaseAuth   auth;
 FirebaseConfig config_firebase;
 
-String bleCihazAdi = String("yoklama_") + String(BU_SINIF_NO);
-String aktifDersDurumu = ""; 
+String bleDeviceName = String("yoklama_") + String(THIS_CLASSROOM_NO);
+String activeLessonStatus = ""; 
 BLEServer* pServer = NULL; 
 
-void rgbAyarla(bool k, bool y, bool m) {
-    digitalWrite(PIN_KIRMIZI, k);
-    digitalWrite(PIN_YESIL,   y);
-    digitalWrite(PIN_MAVI,    m);
+void setRgb(bool r, bool g, bool b) {
+    digitalWrite(PIN_RED,   r);
+    digitalWrite(PIN_GREEN, g);
+    digitalWrite(PIN_BLUE,  b);
 }
 
-int sonOkunanRssi = -99; 
+int lastReadRssi = -99; 
 
 static void my_gap_event_handler(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_param_t *param) {
     if (event == ESP_GAP_BLE_READ_RSSI_COMPLETE_EVT) {
-        int anlikRssi = param->read_rssi_cmpl.rssi;
+        int currentRssi = param->read_rssi_cmpl.rssi;
         
         char macStr[18];
         sprintf(macStr, "%02x:%02x:%02x:%02x:%02x:%02x",
@@ -82,11 +82,11 @@ static void my_gap_event_handler(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_pa
                 param->read_rssi_cmpl.remote_addr[2], param->read_rssi_cmpl.remote_addr[3],
                 param->read_rssi_cmpl.remote_addr[4], param->read_rssi_cmpl.remote_addr[5]);
         
-        String okunanMac = String(macStr);
+        String readMac = String(macStr);
 
-        for (auto& bag : aktifBaglantilar) {
-            if (bag.macAdresi == okunanMac && bag.tescilEdildi) {
-                firebaseKuyrugu.push({bag.connId, bag.ogrenciNo, "SINIFTA", bag.macAdresi, anlikRssi});
+        for (auto& conn : activeConnections) {
+            if (conn.macAddress == readMac && conn.isRegistered) {
+                firebaseQueue.push({conn.connId, conn.studentNo, "IN_CLASS", conn.macAddress, currentRssi});
                 break;
             }
         }
@@ -96,7 +96,7 @@ static void my_gap_event_handler(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_pa
 class MyServerCallbacks : public BLEServerCallbacks {
     void onConnect(BLEServer* pServer, esp_ble_gatts_cb_param_t* param) {
         uint16_t connId = param->connect.conn_id;
-        sonGelenConnId = connId; 
+        lastConnId = connId; 
         
         char remoteMac[18];
         sprintf(remoteMac, "%02x:%02x:%02x:%02x:%02x:%02x",
@@ -104,10 +104,10 @@ class MyServerCallbacks : public BLEServerCallbacks {
                 param->connect.remote_bda[2], param->connect.remote_bda[3],
                 param->connect.remote_bda[4], param->connect.remote_bda[5]);
         
-        OgrenciBaglanti ob = {connId, "", String(remoteMac), false};
-        aktifBaglantilar.push_back(ob);
+        StudentConnection newConn = {connId, "", String(remoteMac), false};
+        activeConnections.push_back(newConn);
         
-        reklamTetikle = true; 
+        triggerAdvertising = true; 
         Serial.println("[BLE] Cihaz bağlandı. MAC: " + String(remoteMac));
 
         esp_ble_gap_read_rssi(param->connect.remote_bda);
@@ -116,65 +116,65 @@ class MyServerCallbacks : public BLEServerCallbacks {
     void onDisconnect(BLEServer* pServer, esp_ble_gatts_cb_param_t* param) {
         uint16_t connId = param->disconnect.conn_id;
         
-        for (auto it = aktifBaglantilar.begin(); it != aktifBaglantilar.end(); ++it) {
+        for (auto it = activeConnections.begin(); it != activeConnections.end(); ++it) {
             if (it->connId == connId) {
-                if (it->ogrenciNo != "") {
-                    if (aktifDersDurumu != "CIKIS") {
-                        firebaseKuyrugu.push({it->connId, it->ogrenciNo, "AYRILDI", it->macAdresi, 0});
+                if (it->studentNo != "") {
+                    if (activeLessonStatus != "EXIT") {
+                        firebaseQueue.push({it->connId, it->studentNo, "LEFT", it->macAddress, 0});
                     }
                 }
-                aktifBaglantilar.erase(it);
+                activeConnections.erase(it);
                 break;
             }
         }
-        reklamTetikle = true;
+        triggerAdvertising = true;
         Serial.println("[BLE] Cihaz ayrıldı. ConnID: " + String(connId));
     }
 };
 
 class MyCharacteristicCallbacks : public BLECharacteristicCallbacks {
     void onWrite(BLECharacteristic* pCharacteristic) {
-        String ogrenciNo = pCharacteristic->getValue();
-        ogrenciNo.trim();
+        String studentNo = pCharacteristic->getValue();
+        studentNo.trim();
 
-        if (ogrenciNo.length() == 0) return;
+        if (studentNo.length() == 0) return;
 
-        bool eslesti = false;
-        for (auto& bag : aktifBaglantilar) {
-            if (bag.connId == sonGelenConnId && !bag.tescilEdildi) {
-                bag.ogrenciNo = ogrenciNo;
-                bag.tescilEdildi = true;
+        bool matched = false;
+        for (auto& conn : activeConnections) {
+            if (conn.connId == lastConnId && !conn.isRegistered) {
+                conn.studentNo = studentNo;
+                conn.isRegistered = true;
                 
-                firebaseKuyrugu.push({bag.connId, ogrenciNo, "SINIFTA", bag.macAdresi, sonOkunanRssi});
-                eslesti = true;
+                firebaseQueue.push({conn.connId, studentNo, "IN_CLASS", conn.macAddress, lastReadRssi});
+                matched = true;
                 break;
             }
         }
         
-        if (!eslesti) {
-            for (auto& bag : aktifBaglantilar) {
-                if (bag.ogrenciNo == "") {
-                    bag.ogrenciNo = ogrenciNo;
-                    bag.tescilEdildi = true;
-                    firebaseKuyrugu.push({bag.connId, ogrenciNo, "SINIFTA", bag.macAdresi, sonOkunanRssi});
+        if (!matched) {
+            for (auto& conn : activeConnections) {
+                if (conn.studentNo == "") {
+                    conn.studentNo = studentNo;
+                    conn.isRegistered = true;
+                    firebaseQueue.push({conn.connId, studentNo, "IN_CLASS", conn.macAddress, lastReadRssi});
                     break;
                 }
             }
         }
-        Serial.println("[CHECK-IN] Numara Alındı: " + ogrenciNo);
+        Serial.println("[CHECK-IN] Numara Alındı: " + studentNo);
     }
 };
 
 void setup() {
     Serial.begin(115200);
-    pinMode(PIN_KIRMIZI, OUTPUT);
-    pinMode(PIN_YESIL,   OUTPUT);
-    pinMode(PIN_MAVI,    OUTPUT);
+    pinMode(PIN_RED,     OUTPUT);
+    pinMode(PIN_GREEN,   OUTPUT);
+    pinMode(PIN_BLUE,    OUTPUT);
     pinMode(PIN_BUZZER,  OUTPUT);
-    rgbAyarla(LOW, LOW, LOW);
+    setRgb(LOW, LOW, LOW);
 
     // 1. Wi-Fi'ye Bağlanırken: MAVİ LED yanar, 1 Kısa Bip
-    rgbAyarla(LOW, LOW, HIGH); 
+    setRgb(LOW, LOW, HIGH); 
     tone(PIN_BUZZER, 1000); delay(150); noTone(PIN_BUZZER);
     
     WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
@@ -182,7 +182,7 @@ void setup() {
     Serial.println("\nWi-Fi Başarılı!");
 
     // 2. Firebase'e Bağlanırken: KIRMIZI LED yanar, 1 Kısa Bip
-    rgbAyarla(HIGH, LOW, LOW); 
+    setRgb(HIGH, LOW, LOW); 
     tone(PIN_BUZZER, 1000); delay(150); noTone(PIN_BUZZER);
     
     config_firebase.api_key      = API_KEY;
@@ -197,7 +197,7 @@ void setup() {
     rfid.PCD_Init();
 
     BLEDevice::setCustomGapHandler(my_gap_event_handler);
-    BLEDevice::init(bleCihazAdi.c_str());
+    BLEDevice::init(bleDeviceName.c_str());
     BLEDevice::setMTU(23);
 
     pServer = BLEDevice::createServer();
@@ -217,42 +217,42 @@ void setup() {
     BLEDevice::startAdvertising();
 
     // 3. Her Şey Başarılı: YEŞİL LED yanar, 2.5 Saniyelik Uzun Bip
-    rgbAyarla(LOW, HIGH, LOW); 
+    setRgb(LOW, HIGH, LOW); 
     tone(PIN_BUZZER, 1000); delay(2500); noTone(PIN_BUZZER);
 
-    Serial.println("Sistem Hazır: " + bleCihazAdi);
+    Serial.println("Sistem Hazır: " + bleDeviceName);
 }
 
 void loop() {
-    static unsigned long sonDurumKontrol = 0;
+    static unsigned long lastStatusCheck = 0;
     
     // Her 3 saniyede bir Firebase'den Sistem durumunu ve RFID İznini kontrol et
-    if (millis() - sonDurumKontrol > 3000) {
-        sonDurumKontrol = millis();
-        String sistemPath = "/Sistem/" + String(BU_SINIF_NO) + "/durum";
-        String rfidIzinPath = "/Sistem/" + String(BU_SINIF_NO) + "/rfid_izin";
+    if (millis() - lastStatusCheck > 3000) {
+        lastStatusCheck = millis();
+        String statusPath = "/System/" + String(THIS_CLASSROOM_NO) + "/status";
+        String rfidPermissionPath = "/System/" + String(THIS_CLASSROOM_NO) + "/rfid_permission";
         
-        if (Firebase.RTDB.getString(&fbdo, sistemPath)) {
-            String yeniDurum = fbdo.stringData();
-            if (yeniDurum == "CIKIS" && aktifDersDurumu != "CIKIS") {
+        if (Firebase.RTDB.getString(&fbdo, statusPath)) {
+            String newStatus = fbdo.stringData();
+            if (newStatus == "EXIT" && activeLessonStatus != "EXIT") {
                 Serial.println("[SİSTEM] Çıkış emri alındı! Herkes atılıyor.");
-                for (auto& bag : aktifBaglantilar) {
-                    pServer->disconnect(bag.connId); 
+                for (auto& conn : activeConnections) {
+                    pServer->disconnect(conn.connId); 
                 }
             }
-            aktifDersDurumu = yeniDurum;
+            activeLessonStatus = newStatus;
         }
 
         // YENİ EKLENEN: Web arayüzünden RFID izni gelmiş mi bakıyoruz
-        if (Firebase.RTDB.getBool(&fbdo, rfidIzinPath)) {
-            rfidIzin = fbdo.boolData();
+        if (Firebase.RTDB.getBool(&fbdo, rfidPermissionPath)) {
+            rfidPermission = fbdo.boolData();
         } else {
-            rfidIzin = false;
+            rfidPermission = false;
         }
     }
 
     // YENİ EKLENEN: Eğer hoca izin verdiyse kart okumayı aktifleştir
-    if (rfidIzin) {
+    if (rfidPermission) {
         if (rfid.PICC_IsNewCardPresent() && rfid.PICC_ReadCardSerial()) {
             String uidString = "";
             for (byte i = 0; i < rfid.uid.size; i++) {
@@ -266,8 +266,8 @@ void loop() {
             tone(PIN_BUZZER, 1500); delay(100); noTone(PIN_BUZZER);
             
             // Okunan kartın ID'sini hocanın ekranına düşmesi için Firebase'e yolla
-            String okunanPath = "/Sistem/" + String(BU_SINIF_NO) + "/SonOkunanKart";
-            Firebase.RTDB.setString(&fbdo, okunanPath, uidString);
+            String lastCardPath = "/System/" + String(THIS_CLASSROOM_NO) + "/lastReadCard";
+            Firebase.RTDB.setString(&fbdo, lastCardPath, uidString);
             
             Serial.println("[RFID] Kart Okundu: " + uidString);
             
@@ -275,49 +275,49 @@ void loop() {
         }
     }
 
-    if (reklamTetikle && (aktifDersDurumu == "AKTIF" || aktifDersDurumu == "CIKIS")) {
-        reklamTetikle = false;
+    if (triggerAdvertising && (activeLessonStatus == "ACTIVE" || activeLessonStatus == "EXIT")) {
+        triggerAdvertising = false;
         delay(100);
         BLEDevice::startAdvertising(); 
-        rgbAyarla(LOW, HIGH, LOW); 
+        setRgb(LOW, HIGH, LOW); 
     }
 
-    static unsigned long sonRssiIstegi = 0;
-    if (millis() - sonRssiIstegi > 2000) {
-        sonRssiIstegi = millis();
-        for (auto& bag : aktifBaglantilar) {
-            if (bag.tescilEdildi) {
+    static unsigned long lastRssiRequest = 0;
+    if (millis() - lastRssiRequest > 2000) {
+        lastRssiRequest = millis();
+        for (auto& conn : activeConnections) {
+            if (conn.isRegistered) {
                  esp_bd_addr_t bda;
-                 sscanf(bag.macAdresi.c_str(), "%hhx:%hhx:%hhx:%hhx:%hhx:%hhx", 
+                 sscanf(conn.macAddress.c_str(), "%hhx:%hhx:%hhx:%hhx:%hhx:%hhx", 
                          &bda[0], &bda[1], &bda[2], &bda[3], &bda[4], &bda[5]);
                  esp_ble_gap_read_rssi(bda);
             }
         }
     }
 
-    if (!firebaseKuyrugu.empty()) {
-        FirebaseGorev gorev = firebaseKuyrugu.front();
-        firebaseKuyrugu.pop();
+    if (!firebaseQueue.empty()) {
+        FirebaseTask task = firebaseQueue.front();
+        firebaseQueue.pop();
         
-        String dbPath = "/Varlik/" + String(BU_SINIF_NO) + "/" + gorev.ogrenciNo;
+        String dbPath = "/Presence/" + String(THIS_CLASSROOM_NO) + "/" + task.studentNo;
         
         FirebaseJson json;
-        json.set("durum", gorev.durum);
-        if (gorev.durum == "SINIFTA") {
-            json.set("mac", gorev.macAdresi); 
-            json.set("rssi", gorev.rssi); 
+        json.set("status", task.status);
+        if (task.status == "IN_CLASS") {
+            json.set("mac", task.macAddress); 
+            json.set("rssi", task.rssi); 
         }
 
         if (Firebase.RTDB.setJSON(&fbdo, dbPath, &json)) {
-            static String sonLoglananNo = "";
-            if (gorev.ogrenciNo != sonLoglananNo) {
-                 Serial.println("[Firebase] Girdi/Çıktı Güncellendi: " + gorev.ogrenciNo);
-                 sonLoglananNo = gorev.ogrenciNo;
+            static String lastLoggedNo = "";
+            if (task.studentNo != lastLoggedNo) {
+                 Serial.println("[Firebase] Girdi/Çıktı Güncellendi: " + task.studentNo);
+                 lastLoggedNo = task.studentNo;
             }
             
-            if (gorev.durum == "SINIFTA" && aktifDersDurumu == "CIKIS") {
+            if (task.status == "IN_CLASS" && activeLessonStatus == "EXIT") {
                 delay(250); 
-                pServer->disconnect(gorev.connId);
+                pServer->disconnect(task.connId);
                 Serial.println("[ÇIKIŞ YOKLAMASI] Öğrenci onaylandı ve atıldı.");
             } 
         }

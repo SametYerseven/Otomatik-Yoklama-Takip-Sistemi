@@ -50,8 +50,8 @@
                 </div>
             </div>
             <ul class="sidebar-nav">
-                <li><a href="#" class="active" id="nav-dersler"><i class="fa-solid fa-book"></i> Derslerim</a></li>
-                <li><a href="#" id="nav-yoklama" class="disabled"><i class="fa-solid fa-clipboard-user"></i> Aktif Yoklama</a></li>
+                <li><a href="#" class="active" id="nav-courses"><i class="fa-solid fa-book"></i> Derslerim</a></li>
+                <li><a href="#" id="nav-attendance" class="disabled"><i class="fa-solid fa-clipboard-user"></i> Aktif Yoklama</a></li>
                 <li><a href="#" onclick="toast('Takvim özelliği yakında eklenecek.', 'info'); return false;"><i class="fa-solid fa-calendar-days"></i> Takvim</a></li>
                 <li><a href="#" onclick="toast('Ayarlar özelliği yakında eklenecek.', 'info'); return false;"><i class="fa-solid fa-gear"></i> Ayarlar</a></li>
             </ul>
@@ -116,11 +116,11 @@
                     <div class="table-panel">
                         <div class="panel-head border-green">
                             <h3><i class="fa-solid fa-arrow-right-to-bracket"></i> Giriş Yapanlar</h3>
-                            <span class="count" id="giris-count">0</span>
+                            <span class="count" id="checkin-count">0</span>
                         </div>
                         <table class="modern-table">
                             <thead><tr><th>Öğrenci No</th><th>Ad Soyad</th></tr></thead>
-                            <tbody id="tbody-giris"><tr><td colspan="2" class="empty-state">Bekleniyor...</td></tr></tbody>
+                            <tbody id="tbody-checkin"><tr><td colspan="2" class="empty-state">Bekleniyor...</td></tr></tbody>
                         </table>
                     </div>
 
@@ -128,11 +128,11 @@
                     <div class="table-panel">
                         <div class="panel-head border-orange">
                             <h3><i class="fa-solid fa-arrow-right-from-bracket"></i> Çıkış Yapanlar</h3>
-                            <span class="count" id="cikis-count">0</span>
+                            <span class="count" id="checkout-count">0</span>
                         </div>
                         <table class="modern-table">
                             <thead><tr><th>Öğrenci No</th><th>Ad Soyad</th></tr></thead>
-                            <tbody id="tbody-cikis"><tr><td colspan="2" class="empty-state">Çıkış başlamadı.</td></tr></tbody>
+                            <tbody id="tbody-checkout"><tr><td colspan="2" class="empty-state">Çıkış başlamadı.</td></tr></tbody>
                         </table>
                     </div>
 
@@ -141,13 +141,13 @@
                         <div class="panel-head border-blue">
                             <h3><i class="fa-solid fa-clipboard-list"></i> Sınıf Yoklama Özeti</h3>
                             <div>
-                                <span class="count bg-success" style="margin-right: 5px;" id="genel-var-count">0</span>
-                                <span class="count bg-danger" id="genel-yok-count">0</span>
+                                <span class="count bg-success" style="margin-right: 5px;" id="summary-present-count">0</span>
+                                <span class="count bg-danger" id="summary-absent-count">0</span>
                             </div>
                         </div>
                         <table class="modern-table">
                             <thead><tr><th>Öğrenci No</th><th>Ad Soyad</th><th>Nihai Durum</th></tr></thead>
-                            <tbody id="tbody-genel"><tr><td colspan="3" class="empty-state">Yükleniyor...</td></tr></tbody>
+                            <tbody id="tbody-summary"><tr><td colspan="3" class="empty-state">Yükleniyor...</td></tr></tbody>
                         </table>
                     </div>
                 </div>

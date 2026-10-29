@@ -1,33 +1,54 @@
 {
-  "Ogretmenler": {
+  "Teachers": {
     "osman_altay": {
-      "isim": "Doç. Dr. Osman Altay",
-      "sifre": "123",
-      "dersler": ["SE 3114 - Nesnelerin İnterneti", "SE 4101 - Siber Güvenlik", "SE 3924 - Python Programlama", "SE 3252 - Nesne Yönelimli Programlama", "SE 4523 - Veri Madenciliği"]
+      "name": "Doç. Dr. Osman Altay",
+      "password": "123",
+      "courses": [
+        "SE 3114 - Nesnelerin İnterneti",
+        "SE 4101 - Siber Güvenlik",
+        "SE 3924 - Python Programlama",
+        "SE 3252 - Nesne Yönelimli Programlama",
+        "SE 4523 - Veri Madenciliği"
+      ]
     },
     "müge_özcevik": {
-      "isim": "Doç. Dr. Müge Özçevik",
-      "sifre": "1234",
-      "dersler": ["SE 1532 - Kablosuz İletişim Ağları", "SE 4523 - Bilgisayar Ağları", "SE 4634 - Algoritma Analizi ve Tasarımı", "SE 3242 - Servis Odaklı Mimari"]
+      "name": "Doç. Dr. Müge Özçevik",
+      "password": "1234",
+      "courses": [
+        "SE 1532 - Kablosuz İletişim Ağları",
+        "SE 4523 - Bilgisayar Ağları",
+        "SE 4634 - Algoritma Analizi ve Tasarımı",
+        "SE 3242 - Servis Odaklı Mimari"
+      ]
     },
     "elif_varol_altay": {
-      "isim": "Doç. Dr. Elif Varol Altay",
-      "sifre": "12345",
-      "dersler": ["SE 2146 - Yapay Zeka", "SE 4834 - İşletim Sistemleri", "SE 6453 - Makine Öğrenmesi"]
+      "name": "Doç. Dr. Elif Varol Altay",
+      "password": "12345",
+      "courses": [
+        "SE 2146 - Yapay Zeka",
+        "SE 4834 - İşletim Sistemleri",
+        "SE 6453 - Makine Öğrenmesi"
+      ]
     }
   },
-  "Siniflar": ["203", "204", "205", "Amfi 1", "Lab 2"],
-  "Varlik": {
+  "Classrooms": [
+    "203",
+    "204",
+    "205",
+    "Amfi 1",
+    "Lab 2"
+  ],
+  "Presence": {
     "203": {
       "232804009": {
-        "durum": "YOK",
-        "girisZamani": 0,
-        "ayrilmaZamani": 0
+        "status": "ABSENT",
+        "checkInTime": 0,
+        "leaveTime": 0
       },
       "220101004": {
-        "durum": "YOK",
-        "girisZamani": 0,
-        "ayrilmaZamani": 0
+        "status": "ABSENT",
+        "checkInTime": 0,
+        "leaveTime": 0
       }
     }
   }

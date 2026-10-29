@@ -33,152 +33,152 @@ print("  Bağlantı başarılı!\n")
 # ==========================================================
 
 # Kaç ölçüm saklansın (pencere)
-PENCERE_BOYUTU = 15
+WINDOW_SIZE = 15
 
 # RSSI standart sapması bu değerin altındaysa telefon bırakılmış demektir
-SABITLIK_ESIGI = 2.5   # dBm
+STABILITY_THRESHOLD = 2.5   # dBm
 
 # Bu değerden güçlü sinyal "çok yakın" uyarısı verir
-COK_GUCLU_ESIK = -45   # dBm
+TOO_STRONG_THRESHOLD = -45   # dBm
 
 # Bu değerden zayıf sinyal X ölçüm boyunca devam ederse uyarı verir
-COK_ZAYIF_ESIK = -85   # dBm
-ZAYIF_SURE     = 10    # ölçüm sayısı
+TOO_WEAK_THRESHOLD = -85  # dBm
+WEAK_DURATION      = 10   # ölçüm sayısı
 
-SINIF      = "203"
-OGRENCI_NO = "232804009"
+CLASSROOM  = "203"
+STUDENT_NO = "232804009"
 
 # ==========================================================
 # 3. VERİ YAPILARI
 # ==========================================================
-ogrenci_verileri = {}   # ogrenci_no → deque(rssi geçmişi)
-uyari_gecmisi    = {}   # ogrenci_no → son uyarı zamanı (spam önleme)
+student_data  = {}   # student_no → deque(rssi geçmişi)
+alert_history = {}   # student_no → son uyarı zamanı (spam önleme)
 
-def ogrenci_verisi_al(no):
-    if no not in ogrenci_verileri:
-        ogrenci_verileri[no] = deque(maxlen=PENCERE_BOYUTU)
-        uyari_gecmisi[no]    = {}
-    return ogrenci_verileri[no]
+def get_student_data(student_no):
+    if student_no not in student_data:
+        student_data[student_no] = deque(maxlen=WINDOW_SIZE)
+        alert_history[student_no]    = {}
+    return student_data[student_no]
 
-def uyari_yazdir(tip, ogrenci_no, mesaj, detay=""):
+def print_alert(alert_type, student_no, message, detail=""):
     """Aynı uyarıyı 30 saniye içinde tekrar gösterme."""
-    simdi = time.time()
-    son   = uyari_gecmisi.get(ogrenci_no, {}).get(tip, 0)
-    if simdi - son < 30:
+    now = time.time()
+    last   = alert_history.get(student_no, {}).get(alert_type, 0)
+    if now - last < 30:
         return
 
-    uyari_gecmisi.setdefault(ogrenci_no, {})[tip] = simdi
-    zaman = datetime.now().strftime("%H:%M:%S")
+    alert_history.setdefault(student_no, {})[alert_type] = now
+    timestamp = datetime.now().strftime("%H:%M:%S")
 
-    renkler = {
-        "SABITLIK" : "⚠️ ",
-        "COK_YAKIN": "🚨",
-        "COK_ZAYIF": "📡",
+    icons = {
+        "STABILITY" : "⚠️ ",
+        "TOO_CLOSE": "🚨",
+        "TOO_WEAK": "📡",
     }
-    ikon = renkler.get(tip, "⚠️ ")
+    icon = icons.get(alert_type, "⚠️ ")
 
     print(f"\n{'─'*55}")
-    print(f"  {ikon}  ANOMALİ TESPİT EDİLDİ  [{zaman}]")
-    print(f"  Öğrenci : {ogrenci_no}")
-    print(f"  Tip     : {mesaj}")
-    if detay:
-        print(f"  Detay   : {detay}")
+    print(f"  {icon}  ANOMALİ TESPİT EDİLDİ  [{timestamp}]")
+    print(f"  Öğrenci : {student_no}")
+    print(f"  Tip     : {message}")
+    if detail:
+        print(f"  Detay   : {detail}")
     print(f"{'─'*55}\n")
 
 # ==========================================================
 # 4. ANOMALİ KONTROL FONKSİYONU
 # ==========================================================
-def anomali_kontrol(ogrenci_no, rssi):
-    gecmis = ogrenci_verisi_al(ogrenci_no)
-    gecmis.append(rssi)
+def check_anomaly(student_no, rssi):
+    history = get_student_data(student_no)
+    history.append(rssi)
 
     # Yeterli veri birikimine bekle
-    if len(gecmis) < 5:
+    if len(history) < 5:
         return
 
-    dizi = np.array(gecmis)
+    values = np.array(history)
 
     # --- KONTROL 1: Sabitlik (Telefon bırakılmış mı?) ---
-    if len(gecmis) >= PENCERE_BOYUTU:
-        std = np.std(dizi)
-        if std < SABITLIK_ESIGI:
-            uyari_yazdir(
-                "SABITLIK", ogrenci_no,
+    if len(history) >= WINDOW_SIZE:
+        std = np.std(values)
+        if std < STABILITY_THRESHOLD:
+            print_alert(
+                "STABILITY", student_no,
                 "Telefon sınıfta BIRAKILIYOR olabilir!",
-                f"Son {PENCERE_BOYUTU} ölçümde standart sapma: {std:.2f} dBm "
-                f"(eşik: {SABITLIK_ESIGI} dBm)"
+                f"Son {WINDOW_SIZE} ölçümde standart sapma: {std:.2f} dBm "
+                f"(eşik: {STABILITY_THRESHOLD} dBm)"
             )
 
     # --- KONTROL 2: Çok güçlü sinyal (ESP32'ye yapıştı mı?) ---
-    if rssi > COK_GUCLU_ESIK:
-        uyari_yazdir(
-            "COK_YAKIN", ogrenci_no,
+    if rssi > TOO_STRONG_THRESHOLD:
+        print_alert(
+            "TOO_CLOSE", student_no,
             "Öğrenci ESP32'ye ANORMAL DERECEDE YAKIN!",
-            f"RSSI = {rssi} dBm (eşik: >{COK_GUCLU_ESIK} dBm) — "
+            f"RSSI = {rssi} dBm (eşik: >{TOO_STRONG_THRESHOLD} dBm) — "
             f"Cihazı ESP32'ye yapıştırıyor olabilir."
         )
 
     # --- KONTROL 3: Uzun süreli zayıf sinyal (Sınıf dışına mı çıktı?) ---
-    if len(gecmis) >= ZAYIF_SURE:
-        son_olcumler = list(gecmis)[-ZAYIF_SURE:]
-        if all(r < COK_ZAYIF_ESIK for r in son_olcumler):
-            uyari_yazdir(
-                "COK_ZAYIF", ogrenci_no,
+    if len(history) >= WEAK_DURATION:
+        last_measurements = list(history)[-WEAK_DURATION:]
+        if all(r < TOO_WEAK_THRESHOLD for r in last_measurements):
+            print_alert(
+                "TOO_WEAK", student_no,
                 "Öğrenci SINIF DIŞINA ÇIKMIŞ olabilir!",
-                f"Son {ZAYIF_SURE} ölçümün tamamı "
-                f"{COK_ZAYIF_ESIK} dBm altında. "
-                f"Ort: {np.mean(son_olcumler):.1f} dBm"
+                f"Son {WEAK_DURATION} ölçümün tamamı "
+                f"{TOO_WEAK_THRESHOLD} dBm altında. "
+                f"Ort: {np.mean(last_measurements):.1f} dBm"
             )
 
 # ==========================================================
 # 5. FİREBASE DİNLEYİCİSİ
 # ==========================================================
-print(f"[2/2] Dinleme başlatıldı → /Varlik/{SINIF}")
-print(f"  Sabitlik eşiği  : std < {SABITLIK_ESIGI} dBm")
-print(f"  Çok yakın eşiği : RSSI > {COK_GUCLU_ESIK} dBm")
-print(f"  Çok zayıf eşiği : RSSI < {COK_ZAYIF_ESIK} dBm ({ZAYIF_SURE} ölçüm)")
+print(f"[2/2] Dinleme başlatıldı → /Presence/{CLASSROOM}")
+print(f"  Sabitlik eşiği  : std < {STABILITY_THRESHOLD} dBm")
+print(f"  Çok yakın eşiği : RSSI > {TOO_STRONG_THRESHOLD} dBm")
+print(f"  Çok zayıf eşiği : RSSI < {TOO_WEAK_THRESHOLD} dBm ({WEAK_DURATION} ölçüm)")
 print("\nDurdurmak için CTRL+C\n")
 print(f"{'Saat':<10} {'Öğrenci':<15} {'RSSI':>10}   Durum")
 print("─" * 55)
 
-def varlik_dinleyici(event):
+def presence_listener(event):
     if event.data is None:
         return
 
     path = event.path
-    veri = event.data
+    data = event.data
 
     # DURUM 1: İlk bağlantıda tüm sınıf verisi gelirse (path == "/")
     if path == "/":
-        if isinstance(veri, dict):
-            for ogrenci_no, ogrenci_veri in veri.items():
-                if isinstance(ogrenci_veri, dict) and "rssi" in ogrenci_veri:
-                    rssi = ogrenci_veri["rssi"]
+        if isinstance(data, dict):
+            for student_no, student_record in data.items():
+                if isinstance(student_record, dict) and "rssi" in student_record:
+                    rssi = student_record["rssi"]
                     if rssi and rssi != 0:
-                        zaman = datetime.now().strftime("%H:%M:%S")
-                        print(f"{zaman:<10} {ogrenci_no:<15} {rssi:>8} dBm   Normal")
-                        anomali_kontrol(ogrenci_no, rssi)
+                        timestamp = datetime.now().strftime("%H:%M:%S")
+                        print(f"{timestamp:<10} {student_no:<15} {rssi:>8} dBm   Normal")
+                        check_anomaly(student_no, rssi)
                         
     # DURUM 2: ESP32 anlık olarak tek bir öğrenciyi veya sadece RSSI güncellerse
     else:
         # path örneğin "/232804009" veya "/232804009/rssi" şeklinde gelir
-        parcalar = path.strip("/").split("/")
-        ogrenci_no = parcalar[0]
+        parts = path.strip("/").split("/")
+        student_no = parts[0]
         
         rssi = None
-        if isinstance(veri, dict) and "rssi" in veri:
-            rssi = veri["rssi"]
-        elif len(parcalar) > 1 and parcalar[1] == "rssi":
-            rssi = veri # Değer direkt integer/float olarak geldiyse
+        if isinstance(data, dict) and "rssi" in data:
+            rssi = data["rssi"]
+        elif len(parts) > 1 and parts[1] == "rssi":
+            rssi = data # Değer direkt integer/float olarak geldiyse
             
         if rssi is not None and rssi != 0:
-            zaman = datetime.now().strftime("%H:%M:%S")
-            print(f"{zaman:<10} {ogrenci_no:<15} {rssi:>8} dBm   Normal")
-            anomali_kontrol(ogrenci_no, rssi)
+            timestamp = datetime.now().strftime("%H:%M:%S")
+            print(f"{timestamp:<10} {student_no:<15} {rssi:>8} dBm   Normal")
+            check_anomaly(student_no, rssi)
 
 # Firebase dinleyicisini başlat
-db_path  = f"/Varlik/{SINIF}"
-dinleyici = db.reference(db_path).listen(varlik_dinleyici)
+db_path = f"/Presence/{CLASSROOM}"
+listener = db.reference(db_path).listen(presence_listener)
 
 # Programın kapanmaması ve sürekli veri beklemesi için sonsuz döngü
 try:
@@ -186,5 +186,5 @@ try:
     while True:
         time.sleep(1)
 except KeyboardInterrupt:
-    dinleyici.close()
+    listener.close()
     print("\n✓ Anomali tespiti durduruldu.")

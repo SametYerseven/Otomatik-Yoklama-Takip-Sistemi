@@ -7,8 +7,8 @@ import io.flutter.plugin.common.MethodChannel
 
 /**
  * Flutter (Dart) ile Android (Kotlin) arasindaki kopru.
- *  - MethodChannel  "yoklama/beacon"         : Dart -> Kotlin komutlari (baslat, gecmis)
- *  - EventChannel   "yoklama/beacon_olaylar" : Kotlin -> Dart canli olay akisi
+ *  - MethodChannel  "attendance/beacon"         : Dart -> Kotlin komutlari (start, history)
+ *  - EventChannel   "attendance/beacon_events" : Kotlin -> Dart canli olay akisi
  */
 class MainActivity : FlutterActivity() {
 
@@ -16,30 +16,30 @@ class MainActivity : FlutterActivity() {
         super.configureFlutterEngine(flutterEngine)
         val messenger = flutterEngine.dartExecutor.binaryMessenger
 
-        MethodChannel(messenger, "yoklama/beacon").setMethodCallHandler { call, result ->
-            val app = BeaconApp.ornek
+        MethodChannel(messenger, "attendance/beacon").setMethodCallHandler { call, result ->
+            val app = BeaconApp.instance
             when (call.method) {
-                "baslat" -> {
-                    if (app.izinlerTamam()) {
-                        app.taramayiBaslat()
+                "start" -> {
+                    if (app.hasPermissions()) {
+                        app.startScanning()
                         result.success(true)
                     } else {
                         result.success(false)
                     }
                 }
-                "gecmis" -> result.success(app.gecmis.toList())
+                "history" -> result.success(app.history.toList())
                 else -> result.notImplemented()
             }
         }
 
-        EventChannel(messenger, "yoklama/beacon_olaylar").setStreamHandler(
+        EventChannel(messenger, "attendance/beacon_events").setStreamHandler(
             object : EventChannel.StreamHandler {
                 override fun onListen(arguments: Any?, events: EventChannel.EventSink?) {
-                    BeaconApp.olaySink = events
+                    BeaconApp.eventSink = events
                 }
 
                 override fun onCancel(arguments: Any?) {
-                    BeaconApp.olaySink = null
+                    BeaconApp.eventSink = null
                 }
             }
         )

@@ -29,7 +29,7 @@ import java.util.Locale
  * Uygulama surecinin kendisi. Uygulama ekrani kapali olsa bile (arka planda,
  * telefon cepteyken) beacon taramasi burada calisir.
  *
- * - Ilk acilista izinler verilince Flutter "baslat" der -> tarama baslar.
+ * - Ilk acilista izinler verilince Flutter "start" der -> tarama baslar.
  * - Sonraki acilislarda (telefon yeniden baslatildiginda vb.) izinler zaten
  *   verilmis oldugu icin onCreate taramayi kendisi baslatir.
  */
@@ -39,40 +39,40 @@ class BeaconApp : Application() {
         const val TAG = "BeaconApp"
 
         // ESP32 kodundaki UUID ile AYNI olmali
-        const val PROJE_UUID = "6f1d3b2a-8c4e-4a7f-9b21-5d3e8a9c0f47"
+        const val PROJECT_UUID = "6f1d3b2a-8c4e-4a7f-9b21-5d3e8a9c0f47"
 
         // iBeacon paket formati
-        const val IBEACON_DUZENI = "m:2-3=0215,i:4-19,i:20-21,i:22-23,p:24-24"
+        const val IBEACON_LAYOUT = "m:2-3=0215,i:4-19,i:20-21,i:22-23,p:24-24"
 
-        const val KANAL_SERVIS = "beacon_servis"   // kalici "Yoklama aktif" bildirimi
-        const val KANAL_OLAY = "beacon_olay"       // "Sinifa girdin / cikti" bildirimleri
-        const val SERVIS_BILDIRIM_ID = 456
+        const val CHANNEL_SERVICE = "beacon_service"   // kalici "Yoklama aktif" bildirimi
+        const val CHANNEL_EVENT = "beacon_event"       // "Sinifa girdin / cikti" bildirimleri
+        const val SERVICE_NOTIFICATION_ID = 456
 
-        lateinit var ornek: BeaconApp
+        lateinit var instance: BeaconApp
             private set
 
         // Flutter ekrani aciksa olaylar buradan ekrana gonderilir
-        var olaySink: EventChannel.EventSink? = null
+        var eventSink: EventChannel.EventSink? = null
     }
 
-    private val anaThread = Handler(Looper.getMainLooper())
-    private val bolge = Region("sinif-bolgesi", Identifier.parse(PROJE_UUID), null, null)
-    private var taramaBasladi = false
-    private var olayBildirimId = 1000
-    private val saatFormati = SimpleDateFormat("HH:mm:ss", Locale("tr", "TR"))
+    private val mainHandler = Handler(Looper.getMainLooper())
+    private val classRegion = Region("classroom-region", Identifier.parse(PROJECT_UUID), null, null)
+    private var scanningStarted = false
+    private var eventNotificationId = 1000
+    private val timeFormat = SimpleDateFormat("HH:mm:ss", Locale("tr", "TR"))
 
     // Uygulama kapaliyken olan giris/cikislari, uygulama acildiginda gostermek icin
-    val gecmis = ArrayDeque<String>()
+    val history = ArrayDeque<String>()
 
     override fun onCreate() {
         super.onCreate()
-        ornek = this
-        bildirimKanallariniOlustur()
-        if (izinlerTamam()) taramayiBaslat()
+        instance = this
+        createNotificationChannels()
+        if (hasPermissions()) startScanning()
     }
 
-    fun izinlerTamam(): Boolean {
-        val konum = ContextCompat.checkSelfPermission(
+    fun hasPermissions(): Boolean {
+        val location = ContextCompat.checkSelfPermission(
             this, Manifest.permission.ACCESS_FINE_LOCATION
         ) == PackageManager.PERMISSION_GRANTED
 
@@ -81,21 +81,21 @@ class BeaconApp : Application() {
                 this, Manifest.permission.BLUETOOTH_SCAN
             ) == PackageManager.PERMISSION_GRANTED
 
-        return konum && bluetooth
+        return location && bluetooth
     }
 
-    fun taramayiBaslat() {
-        if (taramaBasladi) return
-        taramaBasladi = true
+    fun startScanning() {
+        if (scanningStarted) return
+        scanningStarted = true
 
         val bm = BeaconManager.getInstanceForApplication(this)
         bm.beaconParsers.clear()
-        bm.beaconParsers.add(BeaconParser().setBeaconLayout(IBEACON_DUZENI))
+        bm.beaconParsers.add(BeaconParser().setBeaconLayout(IBEACON_LAYOUT))
 
         // Foreground service: Android'in arka plandaki taramayi oldurmemesi icin
         // bildirim cubugunda kalici bir "Yoklama aktif" bildirimi gosterilir.
         try {
-            bm.enableForegroundServiceScanning(servisBildirimi(), SERVIS_BILDIRIM_ID)
+            bm.enableForegroundServiceScanning(serviceNotification(), SERVICE_NOTIFICATION_ID)
         } catch (e: IllegalStateException) {
             Log.w(TAG, "Foreground service zaten ayarli: ${e.message}")
         }
@@ -109,69 +109,69 @@ class BeaconApp : Application() {
 
         bm.addMonitorNotifier(object : MonitorNotifier {
             override fun didEnterRegion(region: Region) {
-                olayKaydet("giris", "Sınıfa girdin", "Beacon algılandı")
+                recordEvent("enter", "Sınıfa girdin", "Beacon algılandı")
             }
 
             override fun didExitRegion(region: Region) {
-                olayKaydet("cikis", "Sınıftan çıktın", "Beacon ~10 saniyedir görülmüyor")
+                recordEvent("exit", "Sınıftan çıktın", "Beacon ~10 saniyedir görülmüyor")
             }
 
             override fun didDetermineStateForRegion(state: Int, region: Region) {}
         })
 
-        bm.addRangeNotifier { beaconlar, _ -> araligiGonder(beaconlar) }
+        bm.addRangeNotifier { beacons, _ -> sendRange(beacons) }
 
-        bm.startMonitoring(bolge)       // giris/cikis olaylari
-        bm.startRangingBeacons(bolge)   // her taramada RSSI, major, minor
+        bm.startMonitoring(classRegion)      // giris/cikis olaylari
+        bm.startRangingBeacons(classRegion)   // her taramada RSSI, major, minor
         Log.i(TAG, "Beacon taramasi basladi")
     }
 
     // ------------------------------------------------------------------
 
-    private fun olayKaydet(tip: String, baslik: String, aciklama: String) {
-        val saat = saatFormati.format(Date())
-        val satir = "$saat  $baslik"
+    private fun recordEvent(type: String, title: String, description: String) {
+        val time = timeFormat.format(Date())
+        val line = "$time  $title"
 
-        gecmis.addFirst(satir)
-        while (gecmis.size > 50) gecmis.removeLast()
+        history.addFirst(line)
+        while (history.size > 50) history.removeLast()
 
-        olayBildirimiGoster(baslik, "$aciklama ($saat)")
+        showEventNotification(title, "$description ($time)")
 
-        anaThread.post {
-            olaySink?.success(mapOf("tip" to tip, "satir" to satir))
+        mainHandler.post {
+            eventSink?.success(mapOf("type" to type, "line" to line))
         }
-        Log.i(TAG, satir)
+        Log.i(TAG, line)
     }
 
-    private fun araligiGonder(beaconlar: Collection<Beacon>) {
-        val liste = beaconlar.map {
+    private fun sendRange(beacons: Collection<Beacon>) {
+        val list = beacons.map {
             mapOf(
                 "major" to it.id2.toInt(),
                 "minor" to it.id3.toInt(),
                 "rssi" to it.rssi,
-                "mesafe" to it.distance
+                "distance" to it.distance
             )
         }
-        anaThread.post {
-            olaySink?.success(mapOf("tip" to "aralik", "beaconlar" to liste))
+        mainHandler.post {
+            eventSink?.success(mapOf("type" to "range", "beacons" to list))
         }
     }
 
     // ------------------------------------------------------------------
     // Bildirimler
 
-    private fun bildirimKanallariniOlustur() {
+    private fun createNotificationChannels() {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
         val nm = getSystemService(NotificationManager::class.java)
         nm.createNotificationChannel(
-            NotificationChannel(KANAL_SERVIS, "Yoklama servisi", NotificationManager.IMPORTANCE_LOW)
+            NotificationChannel(CHANNEL_SERVICE, "Yoklama servisi", NotificationManager.IMPORTANCE_LOW)
         )
         nm.createNotificationChannel(
-            NotificationChannel(KANAL_OLAY, "Sınıf giriş/çıkış", NotificationManager.IMPORTANCE_HIGH)
+            NotificationChannel(CHANNEL_EVENT, "Sınıf giriş/çıkış", NotificationManager.IMPORTANCE_HIGH)
         )
     }
 
-    private fun uygulamayiAcIntenti(): PendingIntent {
+    private fun openAppIntent(): PendingIntent {
         val intent = Intent(this, MainActivity::class.java)
             .addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP)
         return PendingIntent.getActivity(
@@ -180,25 +180,25 @@ class BeaconApp : Application() {
         )
     }
 
-    private fun servisBildirimi(): Notification =
-        NotificationCompat.Builder(this, KANAL_SERVIS)
+    private fun serviceNotification(): Notification =
+        NotificationCompat.Builder(this, CHANNEL_SERVICE)
             .setSmallIcon(R.mipmap.ic_launcher)
             .setContentTitle("Yoklama aktif")
             .setContentText("Sınıf beacon'ları arka planda dinleniyor")
-            .setContentIntent(uygulamayiAcIntenti())
+            .setContentIntent(openAppIntent())
             .setOngoing(true)
             .build()
 
-    private fun olayBildirimiGoster(baslik: String, metin: String) {
+    private fun showEventNotification(title: String, text: String) {
         val nm = getSystemService(NotificationManager::class.java)
-        val bildirim = NotificationCompat.Builder(this, KANAL_OLAY)
+        val notification = NotificationCompat.Builder(this, CHANNEL_EVENT)
             .setSmallIcon(R.mipmap.ic_launcher)
-            .setContentTitle(baslik)
-            .setContentText(metin)
-            .setContentIntent(uygulamayiAcIntenti())
+            .setContentTitle(title)
+            .setContentText(text)
+            .setContentIntent(openAppIntent())
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setAutoCancel(true)
             .build()
-        nm.notify(olayBildirimId++, bildirim)
+        nm.notify(eventNotificationId++, notification)
     }
 }

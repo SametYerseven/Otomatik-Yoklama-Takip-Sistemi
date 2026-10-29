@@ -11,6 +11,6 @@
 
 // --- Sistem Ayarları ---
 #define BEACON_UUID "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
-#define SINIF_NO 101
+#define CLASSROOM_NO 101
 
 #endif

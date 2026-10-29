@@ -4,10 +4,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:permission_handler/permission_handler.dart';
 
-void main() => runApp(const YoklamaDenemeApp());
+void main() => runApp(const AttendanceTestApp());
 
-class YoklamaDenemeApp extends StatelessWidget {
-  const YoklamaDenemeApp({super.key});
+class AttendanceTestApp extends StatelessWidget {
+  const AttendanceTestApp({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -15,63 +15,63 @@ class YoklamaDenemeApp extends StatelessWidget {
       title: 'Yoklama Deneme',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(colorSchemeSeed: Colors.indigo, useMaterial3: true),
-      home: const BeaconEkrani(),
+      home: const BeaconScreen(),
     );
   }
 }
 
-class BeaconEkrani extends StatefulWidget {
-  const BeaconEkrani({super.key});
+class BeaconScreen extends StatefulWidget {
+  const BeaconScreen({super.key});
 
   @override
-  State<BeaconEkrani> createState() => _BeaconEkraniState();
+  State<BeaconScreen> createState() => _BeaconScreenState();
 }
 
-class _BeaconEkraniState extends State<BeaconEkrani> with WidgetsBindingObserver {
+class _BeaconScreenState extends State<BeaconScreen> with WidgetsBindingObserver {
   // Kotlin tarafindaki MainActivity.kt ile ayni kanal adlari
-  static const _komut = MethodChannel('yoklama/beacon');
-  static const _olaylar = EventChannel('yoklama/beacon_olaylar');
+  static const _commands = MethodChannel('attendance/beacon');
+  static const _events = EventChannel('attendance/beacon_events');
 
-  StreamSubscription? _abonelik;
-  String _durum = 'İzinler kontrol ediliyor...';
-  bool _taramaAktif = false;
-  List<Map> _beaconlar = [];
-  List<String> _gecmis = [];
+  StreamSubscription? _subscription;
+  String _status = 'İzinler kontrol ediliyor...';
+  bool _isScanning = false;
+  List<Map> _beacons = [];
+  List<String> _history = [];
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    _abonelik = _olaylar.receiveBroadcastStream().listen(_olayGeldi);
-    _izinleriIsteVeBaslat();
+    _subscription = _events.receiveBroadcastStream().listen(_onEvent);
+    _requestPermissionsAndStart();
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
-    _abonelik?.cancel();
+    _subscription?.cancel();
     super.dispose();
   }
 
   // Uygulama arka plandan one gelince, kapaliyken olan giris/cikislari yukle
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed) _gecmisiYukle();
+    if (state == AppLifecycleState.resumed) _loadHistory();
   }
 
-  Future<void> _izinleriIsteVeBaslat() async {
+  Future<void> _requestPermissionsAndStart() async {
     // 1) Temel izinler: Bluetooth tarama, konum (uygulama kullanilirken), bildirim
-    final sonuc = await [
+    final results = await [
       Permission.bluetoothScan,
       Permission.locationWhenInUse,
       Permission.notification,
     ].request();
 
-    final temelTamam = sonuc[Permission.bluetoothScan]!.isGranted &&
-        sonuc[Permission.locationWhenInUse]!.isGranted;
+    final basicGranted = results[Permission.bluetoothScan]!.isGranted &&
+        results[Permission.locationWhenInUse]!.isGranted;
 
-    if (!temelTamam) {
-      setState(() => _durum =
+    if (!basicGranted) {
+      setState(() => _status =
           'Bluetooth ve konum izni gerekli. Ayarlardan izin verip uygulamayı yeniden açın.');
       return;
     }
@@ -83,33 +83,33 @@ class _BeaconEkraniState extends State<BeaconEkrani> with WidgetsBindingObserver
     await Permission.ignoreBatteryOptimizations.request();
 
     // 4) Kotlin tarafinda taramayi baslat
-    final basladi = await _komut.invokeMethod<bool>('baslat') ?? false;
-    final herZaman = await Permission.locationAlways.isGranted;
+    final started = await _commands.invokeMethod<bool>('start') ?? false;
+    final alwaysGranted = await Permission.locationAlways.isGranted;
 
     setState(() {
-      _taramaAktif = basladi;
-      _durum = !basladi
+      _isScanning = started;
+      _status = !started
           ? 'Tarama başlatılamadı (izin eksik).'
-          : herZaman
+          : alwaysGranted
               ? 'Tarama aktif. Uygulamayı kapatıp test edebilirsin.'
               : 'Tarama aktif, ancak konum izni "Her zaman" değil. '
                   'Arka plan testi için Ayarlar > Uygulamalar > İzinler > Konum > "Her zaman izin ver" seç.';
     });
-    _gecmisiYukle();
+    _loadHistory();
   }
 
-  Future<void> _gecmisiYukle() async {
-    final liste = await _komut.invokeMethod<List>('gecmis') ?? [];
-    setState(() => _gecmis = liste.cast<String>());
+  Future<void> _loadHistory() async {
+    final list = await _commands.invokeMethod<List>('history') ?? [];
+    setState(() => _history = list.cast<String>());
   }
 
-  void _olayGeldi(dynamic olay) {
-    final veri = Map<String, dynamic>.from(olay as Map);
+  void _onEvent(dynamic event) {
+    final data = Map<String, dynamic>.from(event as Map);
     setState(() {
-      if (veri['tip'] == 'aralik') {
-        _beaconlar = List<Map>.from(veri['beaconlar'] as List);
+      if (data['type'] == 'range') {
+        _beacons = List<Map>.from(data['beacons'] as List);
       } else {
-        _gecmis.insert(0, veri['satir'] as String);
+        _history.insert(0, data['line'] as String);
       }
     });
   }
@@ -122,17 +122,17 @@ class _BeaconEkraniState extends State<BeaconEkrani> with WidgetsBindingObserver
         padding: const EdgeInsets.all(16),
         children: [
           Card(
-            color: _taramaAktif ? Colors.green.shade50 : Colors.orange.shade50,
+            color: _isScanning ? Colors.green.shade50 : Colors.orange.shade50,
             child: Padding(
               padding: const EdgeInsets.all(16),
               child: Row(
                 children: [
                   Icon(
-                    _taramaAktif ? Icons.bluetooth_searching : Icons.bluetooth_disabled,
-                    color: _taramaAktif ? Colors.green : Colors.orange,
+                    _isScanning ? Icons.bluetooth_searching : Icons.bluetooth_disabled,
+                    color: _isScanning ? Colors.green : Colors.orange,
                   ),
                   const SizedBox(width: 12),
-                  Expanded(child: Text(_durum)),
+                  Expanded(child: Text(_status)),
                 ],
               ),
             ),
@@ -140,26 +140,26 @@ class _BeaconEkraniState extends State<BeaconEkrani> with WidgetsBindingObserver
           const SizedBox(height: 16),
           Text('Şu an görülen beacon\'lar', style: Theme.of(context).textTheme.titleMedium),
           const SizedBox(height: 8),
-          if (_beaconlar.isEmpty)
+          if (_beacons.isEmpty)
             const Padding(
               padding: EdgeInsets.symmetric(vertical: 12),
               child: Text('Henüz beacon görülmedi. ESP32 açık ve yakında mı?'),
             ),
-          ..._beaconlar.map((b) => Card(
+          ..._beacons.map((b) => Card(
                 child: ListTile(
                   leading: const Icon(Icons.sensors),
                   title: Text('Sınıf ${b['major']}   (minor ${b['minor']})'),
                   subtitle: Text(
-                      'RSSI: ${b['rssi']} dBm   •   ~${(b['mesafe'] as num).toStringAsFixed(1)} m'),
+                      'RSSI: ${b['rssi']} dBm   •   ~${(b['distance'] as num).toStringAsFixed(1)} m'),
                 ),
               )),
           const SizedBox(height: 16),
           Text('Giriş / çıkış geçmişi', style: Theme.of(context).textTheme.titleMedium),
           const SizedBox(height: 8),
-          if (_gecmis.isEmpty)
+          if (_history.isEmpty)
             const Text('Henüz olay yok.')
           else
-            ..._gecmis.map((s) => Padding(
+            ..._history.map((s) => Padding(
                   padding: const EdgeInsets.symmetric(vertical: 4),
                   child: Text(s),
                 )),
