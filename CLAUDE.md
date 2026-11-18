@@ -50,6 +50,20 @@ Aşama 3 için bekleyen kararlar: proje Blaze planına geçmeli (ödeme bilgisi;
 arkadaşının hesabında). ESP32'nin saati nereden alacağı seçilmeli: Wi-Fi + NTP ya da DS3231 RTC
 modülü. Röle saldırısı (sınıftaki birinin kodu 30 sn içinde dışarıya iletmesi) bilinen sınır.
 
+**Cloud Functions maliyet kuralları (Blaze, kullandıkça öde; Aşama 3'te uyulmalı):**
+Ücretsiz aylık kota (2 milyon fonksiyon çağrısı, RTDB 1 GB depolama / 10 GB indirme) bu
+proje için fazlasıyla yeterli; para ancak kota aşılırsa, sadece aşan kısım için çıkar.
+Gerçekçi riskler ve önlemleri:
+1. **Kendini tetikleyen döngü.** Bir fonksiyonun veritabanına yazması aynı fonksiyonu
+   (or. `onValueWritten` tetikleyicisi) tekrar tetiklerse saatler içinde milyonlarca çağrı
+   olur. Tetikleyici fonksiyonlar kendi dinledikleri yola yazmamalı; yazmaları gerekiyorsa
+   "değer zaten aynıysa çık" kontrolü olmalı. Tercihen telefon → HTTPS/callable fonksiyon →
+   `Presence` yazımı (tetikleyicisiz) kullanılmalı. Google Cloud'da bütçe uyarısı kurulu
+   olmalı (uyarı harcamayı durdurmaz, sadece e-posta atar).
+2. **Fonksiyon yükleme kalıntıları.** Her `firebase deploy` Artifact Registry'de bir
+   container paketi bırakır (0,5 GB ücretsiz). İlk deploy'da Firebase CLI "eski paketleri
+   otomatik sil" (cleanup policy) sorar: **evet** denmeli.
+
 ## Bekleyen işler
 
 - Ekip arkadaşı yeni kodu kullanmaya başlayınca canlı veritabanındaki Türkçe düğümleri
