@@ -142,6 +142,10 @@ eklerken `esp32/<ad>/<ad>.ino` düzenini koru.
 
 ## Geliştirme ortamı (Windows)
 
+Mobil uygulamayı Talha derliyor; aşağıdaki Flutter/Android ayrıntıları onun bilgisayarı için.
+Samet'in bilgisayarında (`C:\projeler\Otomatik-Yoklama-Takip-Sistemi`) Flutter kurulu değil;
+orada web paneli, ESP32 ve ML scriptleri üzerinde çalışılıyor (Python 3.10, firebase_admin kurulu).
+
 - Flutter 3.47.6 stable, `C:\flutter` (Git ile kuruldu). Path: `C:\flutter\bin`.
 - Android Studio Rabbit 1; Gradle 9.3.1, Android Gradle Plugin 9.1.0 → **compileSdk en fazla 36**.
 - `permission_handler` **^12.0.1'e sabitlendi**: 13.x compileSdk 37 istiyor, AGP 9.1 desteklemiyor.
@@ -208,10 +212,21 @@ Aşama 2 ile eklenen (mobil uygulama yazar; `{uid}` = Firebase Auth uid):
 - `firebase_credentials.json` (servis hesabı, eski adı `firebase_kimlik.json`), `config.h`,
   `config.js`, `google-services.json` **asla commit edilmez** (`.gitignore`'da). Commit öncesi
   `git status` ile kontrol et.
-- Servis hesabı anahtarı 2026-11-18'de yenilendi (eskisi GitHub geçmişinde duruyor; Google
-  Cloud'dan silinmiş olmalı). Eski `esp32/config.h` de Wi-Fi şifresiyle geçmişte duruyor.
-- Web paneli Firebase Auth kullanmıyor; şifreler tarayıcıda kontrol ediliyor ve veritabanı
-  büyük ölçüde açık. Kurallar sıkılaştırılırken paneli bozmamaya dikkat et.
+- Yerel ayar dosyaları örneklerinden kopyalanır: `web/config_example.js` → `web/config.js`,
+  `esp32/legacy_gatt/config_example.h` → `config.h`. Servis hesabı anahtarı Firebase Console →
+  Proje ayarları → Hizmet hesapları'ndan indirilip `ml/ml_pipeline/ml_pipeline/firebase_credentials.json`
+  olarak konur. Anahtar listesi/silme: Google Cloud Console → IAM → Hizmet hesapları →
+  `firebase-adminsdk-fbsvc@...` → Anahtarlar.
+- **Repo 2026-11-18'de sıfırlandı:** Eski public repo (geçmişinde servis hesabı anahtarı ve
+  `esp32/config.h` ile Wi-Fi şifresi vardı) silindi; aynı adla **private** repo açıldı ve proje tek
+  commit (`bbf2ab4`) olarak gönderildi. Eski yerel kopyalar eski geçmişi taşıyor: onlardan
+  push/force-push yapılmaz, yeni repo baştan klonlanır, gizli dosyalar elle kopyalanır.
+  Sızan Wi-Fi şifresi değiştirilmeli.
+- Web paneli Firebase Auth kullanmıyor; şifreler tarayıcıda kontrol ediliyor. `Teachers`
+  (ve eski `Ogretmenler`) düğümü kurallarda `.read: true`: öğretmen şifreleri giriş yapmadan
+  REST ile okunabiliyor, tüm eski düğümlere herkes yazabiliyor. Bu yüzden şifreyi değiştirmek tek
+  başına koruma sağlamaz; asıl çözüm panele Firebase Auth + kuralları sıkılaştırmak.
+  Kurallar sıkılaştırılırken paneli bozmamaya dikkat et.
 
 ## Eski koddaki bilinen sorunlar (yeni sistemde kullanılmıyor ama referans)
 
