@@ -1,0 +1,58 @@
+{
+  "rules": {
+    "Teachers":     { ".read": true, ".write": true },
+    "Classrooms":   { ".read": true, ".write": true },
+    "Students":     { ".read": true, ".write": true },
+    "Presence":     { ".read": true, ".write": true },
+    "System":       { ".read": true, ".write": true },
+    "MLPrediction": { ".read": true, ".write": true },
+    "RFIDCards":    { ".read": true, ".write": true },
+
+    "Ogretmenler":  { ".read": true, ".write": true },
+    "Siniflar":     { ".read": true, ".write": true },
+    "Ogrenciler":   { ".read": true, ".write": true },
+    "Varlik":       { ".read": true, ".write": true },
+    "Sistem":       { ".read": true, ".write": true },
+    "ML_Tahmin":    { ".read": true, ".write": true },
+    "RFID_Kartlar": { ".read": true, ".write": true },
+    "MLKomut":      { ".read": true, ".write": true },
+    "MLSonuclar":   { ".read": true, ".write": true },
+
+    "StudentAccounts": {
+      "$uid": {
+        ".read": "auth != null && auth.uid === $uid",
+        ".write": "auth != null && auth.uid === $uid",
+        ".validate": "newData.hasChildren(['studentNo', 'name', 'email'])",
+        "studentNo": {
+          ".validate": "newData.isString() && root.child('StudentNumbers').child(newData.val()).val() === $uid"
+        },
+        "name": { ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 100" },
+        "email": { ".validate": "newData.isString() && newData.val().length <= 200" },
+        "createdAt": { ".validate": "newData.isNumber()" },
+        "keyCreatedAt": {
+          ".validate": "newData.isNumber() && !data.exists() && root.child('StudentSecrets').child($uid).exists()"
+        },
+        "$other": { ".validate": false }
+      }
+    },
+
+    "StudentNumbers": {
+      "$studentNo": {
+        ".read": "auth != null",
+        ".write": "auth != null && ((!data.exists() && newData.val() === auth.uid) || (data.val() === auth.uid && !newData.exists()))",
+        ".validate": "$studentNo.matches(/^[0-9]{6,12}$/)"
+      }
+    },
+
+    "StudentSecrets": {
+      "$uid": {
+        ".read": false,
+        ".write": "auth != null && auth.uid === $uid && !data.exists() && root.child('StudentAccounts').child($uid).child('studentNo').exists() && root.child('StudentNumbers').child(root.child('StudentAccounts').child($uid).child('studentNo').val()).val() === $uid",
+        ".validate": "newData.hasChildren(['key', 'createdAt'])",
+        "key": { ".validate": "newData.isString() && newData.val().length === 44" },
+        "createdAt": { ".validate": "newData.isNumber()" },
+        "$other": { ".validate": false }
+      }
+    }
+  }
+}

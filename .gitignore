@@ -1,0 +1,56 @@
+# ==========================================
+# GİZLİ KİMLİK DOSYALARI
+# ==========================================
+firebase_kimlik.json
+**/firebase_kimlik.json
+firebase_credentials.json
+**/firebase_credentials.json
+google-services.json
+.env
+.env.*
+
+# ==========================================
+# ESP32 HASSAS AYARLAR
+# ==========================================
+config.h
+**/config.h
+
+# ==========================================
+# WEB HASSAS AYARLAR
+# ==========================================
+config.js
+**/config.js
+
+# ==========================================
+# ML - MODELİ VE VERİYİ KORU
+# ==========================================
+*.pkl
+*.csv
+rssi_dataset.csv
+
+# ==========================================
+# PYTHON
+# ==========================================
+__pycache__/
+*.pyc
+*.pyo
+venv/
+.venv/
+
+# ==========================================
+# IDE & SİSTEM
+# ==========================================
+.vscode/
+.idea/
+.vs/
+*.swp
+.DS_Store
+Thumbs.db
+
+# ==========================================
+# ÇIKTI DOSYALARI
+# ==========================================
+*.png
+rssi_analysis.png
+# Canli veritabani yedekleri (ogretmen sifreleri iceriyor)
+firebase/backups/
