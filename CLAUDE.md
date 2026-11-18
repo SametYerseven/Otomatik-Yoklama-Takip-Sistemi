@@ -57,10 +57,6 @@ modülü. Röle saldırısı (sınıftaki birinin kodu 30 sn içinde dışarıya
   kurallardan çıkarmak.
 - `MLKomut` / `MLSonuclar` düğümlerini yazan kodu bulmak (repoda yok), repoya ekleyip
   İngilizceye çevirmek.
-- Authentication'da Mayıs 2026'dan kalma ~990 anonim hesap var. Kaynağı eski ESP32 kodu:
-  `legacy_gatt.ino` her açılışta `Firebase.signUp(&config, &auth, "", "")` ile yeni anonim hesap
-  açıyor. Yeni sistem anonim giriş kullanmıyor; Anonymous kapatılabilir (açıkken herkes "giriş
-  yapmış" sayılıyor), anonim hesaplar silinebilir. Kapatınca `legacy_gatt` Firebase'e bağlanamaz.
 - Telefon değiştiren öğrenci için öğretmen paneline "cihaz sıfırla" butonu (şu an elle).
 
 ## Klasör yapısı
@@ -239,8 +235,9 @@ Aşama 2 ile eklenen (mobil uygulama yazar; `{uid}` = Firebase Auth uid):
   `TeacherAccounts`'ta kaydı olan kullanıcılar okuyabilir; `Teachers`, `Classrooms`,
   `MLPrediction`, `RFIDCards` istemciden yazılamaz (Console / Admin SDK). Eski Türkçe düğümler
   tamamen kapalı. `MLKomut` / `MLSonuclar` hâlâ herkese açık (onları yazan kodu bilmiyoruz).
-  Eski `legacy_gatt` ESP32 kodu anonim girişle `Presence`/`System`'e yazıyordu; yeni kurallarla
-  yazamaz. Aşama 3'te yazma Cloud Functions (Admin SDK) ile olacak.
+  Eski `legacy_gatt` ESP32 kodu anonim girişle (`Firebase.signUp(..., "", "")`, her açılışta yeni
+  hesap) `Presence`/`System`'e yazıyordu; yeni kurallarla yazamaz. Anonymous giriş 2026-11-18'de
+  Firebase'de kapatıldı, birikmiş 990 anonim hesap silindi. Tekrar açılmamalı. Aşama 3'te yazma Cloud Functions (Admin SDK) ile olacak.
 
 ## Eski koddaki bilinen sorunlar (yeni sistemde kullanılmıyor ama referans)
 
