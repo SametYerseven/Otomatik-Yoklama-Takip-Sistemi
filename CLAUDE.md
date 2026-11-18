@@ -21,7 +21,8 @@ derste ne kadar kaldığının takip edilmesi. Bileşenler: ESP32 (sınıfta), F
      kaldırıyordu. Yayın modelinde kişi sınırı yok.
 2. **MAC adresi KULLANILMAZ.** Telefonlar BLE'de rastgele, değişen adres kullanıyor; uygulamalar
    gerçek MAC'i okuyamıyor. Kimlik, yayın/istek içeriğiyle (HMAC kodları) kanıtlanır.
-3. **Kimlik ve fiziksel varlık HMAC ile kanıtlanır** (Aşama 2–3, henüz yapılmadı):
+3. **Kimlik ve fiziksel varlık HMAC ile kanıtlanır** (öğrenci anahtarı Aşama 2'de hazır; kod
+   üretme ve doğrulama Aşama 3, henüz yapılmadı):
    - ESP32 `minor` alanında 30 sn'de bir değişen sınıf kodu yayınlar.
    - Telefon kendi gizli anahtarıyla öğrenci kodu üretip sunucuya gönderir.
    - Doğrulamayı **Firebase Cloud Functions** yapar (proje Blaze planında olmalı).
@@ -39,7 +40,7 @@ derste ne kadar kaldığının takip edilmesi. Bileşenler: ESP32 (sınıfta), F
 | 2 | Öğrenci kaydı, gizli anahtar | **Tamamlandı** (2026-11-18), Galaxy S24 Ultra'da test edildi: kayıt, giriş, çıkış, tekrar giriş, aynı numarayla ikinci kayıt engelleniyor ve uyarı gösteriliyor. `firebase/database.rules.json` Firebase'de yayında |
 | 3 | Dönen sınıf kodu (ESP32), öğrenci kodu (telefon), Cloud Functions doğrulaması, `Presence`'a yazma | Yapılmadı |
 | — | iOS (Swift + CoreLocation) | Yapılmadı, Mac gerekiyor |
-| — | Öğretmen paneline Firebase Auth | Yapılmadı |
+| — | Öğretmen paneline Firebase Auth | **Tamamlandı** (2026-11-18): e-posta/şifre girişi, `TeacherAccounts` eşlemesi, sıkı kurallar Firebase'de yayında. Şimdilik tek test hesabı (Samet, `osman_altay`'a bağlı); gerçek öğretmen hesapları açılınca silinmeli |
 
 Şu an telefon beacon'u duyup sadece kendi ekranında/bildiriminde gösteriyor; yoklama için
 Firebase'e bir şey göndermiyor (sadece kayıt/giriş verisi yazıyor). ESP32 de Firebase/Wi-Fi
@@ -56,8 +57,10 @@ modülü. Röle saldırısı (sınıftaki birinin kodu 30 sn içinde dışarıya
   kurallardan çıkarmak.
 - `MLKomut` / `MLSonuclar` düğümlerini yazan kodu bulmak (repoda yok), repoya ekleyip
   İngilizceye çevirmek.
-- Authentication'da Mayıs 2026'dan kalma ~990 anonim hesap var; Anonymous girişi açan kodu
-  bulmak, kullanılmıyorsa Anonymous'u kapatmak (açıkken herkes "giriş yapmış" sayılıyor).
+- Authentication'da Mayıs 2026'dan kalma ~990 anonim hesap var. Kaynağı eski ESP32 kodu:
+  `legacy_gatt.ino` her açılışta `Firebase.signUp(&config, &auth, "", "")` ile yeni anonim hesap
+  açıyor. Yeni sistem anonim giriş kullanmıyor; Anonymous kapatılabilir (açıkken herkes "giriş
+  yapmış" sayılıyor), anonim hesaplar silinebilir. Kapatınca `legacy_gatt` Firebase'e bağlanamaz.
 - Telefon değiştiren öğrenci için öğretmen paneline "cihaz sıfırla" butonu (şu an elle).
 
 ## Klasör yapısı
@@ -169,6 +172,10 @@ cd mobile
 flutter pub get
 flutter run            # telefon USB ile bağlı olmalı; terminalde r = hot reload, R = hot restart
 ```
+Web paneli: `web/config.js` gerekli. Proje kökünde
+`python -m http.server 8000 --bind 127.0.0.1 --directory web` → http://localhost:8000
+(`.claude/launch.json`'da `web-panel` olarak da tanımlı). Dosyayı çift tıklayıp `file://` ile açma.
+
 ESP32: Arduino IDE → `esp32/beacon/beacon.ino` → Board: ESP32 Dev Module → Port: COM9 → Upload →
 Serial Monitor 115200. Doğrulama: Android'de nRF Connect uygulamasında "iBeacon" görünmeli
 (iPhone'da nRF Connect iBeacon'ları göstermez).
@@ -183,7 +190,11 @@ sinif_ici→in_class, zaman→time`). Türkçe düğümler henüz SİLİNMEDİ; 
 `firebase/backups/` altında (git'te yok). `MLKomut` ve `MLSonuclar`'ı repodaki hiçbir kod
 kullanmıyor (ekip arkadaşının yerel kodu olabilir); taşınmadı. Kurallarda iki ad seti de açık.
 
-- `Teachers/{username}`: `{ name, password (düz metin!), courses[] }`
+- `TeacherAccounts/{uid}`: `"username"` — öğretmenin Firebase Auth hesabını `Teachers/{username}`
+  profiline bağlar. Sadece Console'dan elle eklenir (kurallarda yazma kapalı). Kurallar
+  "öğretmen mi?" kontrolünü bu düğümle yapar.
+- `Teachers/{username}`: `{ name, courses[] }`. Panel giriş için artık Firebase Auth
+  (e-posta/şifre) kullanıyor; eski `password` alanı 2026-11-18'de canlıdan silindi.
 - `Classrooms`: dizi, örn. `["203","204","205","Amfi 1","Lab 2"]` (beacon için sayı olmalı)
 - `Students/{studentNo}`: `"Ad Soyad"` (düz string)
 - `Presence/{classroom}/{studentNo}`: `{ status: "IN_CLASS" | "ABSENT" | ..., mac, rssi, manual?, checkInTime, leaveTime }`
@@ -218,15 +229,18 @@ Aşama 2 ile eklenen (mobil uygulama yazar; `{uid}` = Firebase Auth uid):
   olarak konur. Anahtar listesi/silme: Google Cloud Console → IAM → Hizmet hesapları →
   `firebase-adminsdk-fbsvc@...` → Anahtarlar.
 - **Repo 2026-11-18'de sıfırlandı:** Eski public repo (geçmişinde servis hesabı anahtarı ve
-  `esp32/config.h` ile Wi-Fi şifresi vardı) silindi; aynı adla **private** repo açıldı ve proje tek
-  commit (`bbf2ab4`) olarak gönderildi. Eski yerel kopyalar eski geçmişi taşıyor: onlardan
+  `esp32/config.h` ile Wi-Fi şifresi vardı) silindi; aynı adla yeni repo açıldı ve proje tek
+  commit (`bbf2ab4`) olarak gönderildi. Repo CV'de linkli olduğu için yine **public**: her
+  commit herkese açık, gizli bilgi girmemeli. Eski yerel kopyalar eski geçmişi taşıyor: onlardan
   push/force-push yapılmaz, yeni repo baştan klonlanır, gizli dosyalar elle kopyalanır.
-  Sızan Wi-Fi şifresi değiştirilmeli.
-- Web paneli Firebase Auth kullanmıyor; şifreler tarayıcıda kontrol ediliyor. `Teachers`
-  (ve eski `Ogretmenler`) düğümü kurallarda `.read: true`: öğretmen şifreleri giriş yapmadan
-  REST ile okunabiliyor, tüm eski düğümlere herkes yazabiliyor. Bu yüzden şifreyi değiştirmek tek
-  başına koruma sağlamaz; asıl çözüm panele Firebase Auth + kuralları sıkılaştırmak.
-  Kurallar sıkılaştırılırken paneli bozmamaya dikkat et.
+  Aynı gün yeni servis hesabı anahtarı oluşturuldu (sızan anahtar Google Cloud'da silinmiş),
+  ev Wi-Fi'nin adı ve şifresi değiştirildi.
+- Web paneli Firebase Auth ile giriş yapıyor (2026-11-18). Kurallarda panel düğümlerini sadece
+  `TeacherAccounts`'ta kaydı olan kullanıcılar okuyabilir; `Teachers`, `Classrooms`,
+  `MLPrediction`, `RFIDCards` istemciden yazılamaz (Console / Admin SDK). Eski Türkçe düğümler
+  tamamen kapalı. `MLKomut` / `MLSonuclar` hâlâ herkese açık (onları yazan kodu bilmiyoruz).
+  Eski `legacy_gatt` ESP32 kodu anonim girişle `Presence`/`System`'e yazıyordu; yeni kurallarla
+  yazamaz. Aşama 3'te yazma Cloud Functions (Admin SDK) ile olacak.
 
 ## Eski koddaki bilinen sorunlar (yeni sistemde kullanılmıyor ama referans)
 

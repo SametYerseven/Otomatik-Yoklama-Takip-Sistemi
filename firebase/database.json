@@ -2,7 +2,6 @@
   "Teachers": {
     "osman_altay": {
       "name": "Doç. Dr. Osman Altay",
-      "password": "123",
       "courses": [
         "SE 3114 - Nesnelerin İnterneti",
         "SE 4101 - Siber Güvenlik",
@@ -13,7 +12,6 @@
     },
     "müge_özcevik": {
       "name": "Doç. Dr. Müge Özçevik",
-      "password": "1234",
       "courses": [
         "SE 1532 - Kablosuz İletişim Ağları",
         "SE 4523 - Bilgisayar Ağları",
@@ -23,7 +21,6 @@
     },
     "elif_varol_altay": {
       "name": "Doç. Dr. Elif Varol Altay",
-      "password": "12345",
       "courses": [
         "SE 2146 - Yapay Zeka",
         "SE 4834 - İşletim Sistemleri",

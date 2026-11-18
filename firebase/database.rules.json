@@ -1,20 +1,27 @@
 {
   "rules": {
-    "Teachers":     { ".read": true, ".write": true },
-    "Classrooms":   { ".read": true, ".write": true },
-    "Students":     { ".read": true, ".write": true },
-    "Presence":     { ".read": true, ".write": true },
-    "System":       { ".read": true, ".write": true },
-    "MLPrediction": { ".read": true, ".write": true },
-    "RFIDCards":    { ".read": true, ".write": true },
+    "TeacherAccounts": {
+      "$uid": {
+        ".read": "auth != null && auth.uid === $uid",
+        ".write": false
+      }
+    },
 
-    "Ogretmenler":  { ".read": true, ".write": true },
-    "Siniflar":     { ".read": true, ".write": true },
-    "Ogrenciler":   { ".read": true, ".write": true },
-    "Varlik":       { ".read": true, ".write": true },
-    "Sistem":       { ".read": true, ".write": true },
-    "ML_Tahmin":    { ".read": true, ".write": true },
-    "RFID_Kartlar": { ".read": true, ".write": true },
+    "Teachers":     { ".read": "auth != null && root.child('TeacherAccounts').child(auth.uid).exists()", ".write": false },
+    "Classrooms":   { ".read": "auth != null && root.child('TeacherAccounts').child(auth.uid).exists()", ".write": false },
+    "Students":     { ".read": "auth != null && root.child('TeacherAccounts').child(auth.uid).exists()", ".write": "auth != null && root.child('TeacherAccounts').child(auth.uid).exists()" },
+    "Presence":     { ".read": "auth != null && root.child('TeacherAccounts').child(auth.uid).exists()", ".write": "auth != null && root.child('TeacherAccounts').child(auth.uid).exists()" },
+    "System":       { ".read": "auth != null && root.child('TeacherAccounts').child(auth.uid).exists()", ".write": "auth != null && root.child('TeacherAccounts').child(auth.uid).exists()" },
+    "MLPrediction": { ".read": "auth != null && root.child('TeacherAccounts').child(auth.uid).exists()", ".write": false },
+    "RFIDCards":    { ".read": "auth != null && root.child('TeacherAccounts').child(auth.uid).exists()", ".write": false },
+
+    "Ogretmenler":  { ".read": false, ".write": false },
+    "Siniflar":     { ".read": false, ".write": false },
+    "Ogrenciler":   { ".read": false, ".write": false },
+    "Varlik":       { ".read": false, ".write": false },
+    "Sistem":       { ".read": false, ".write": false },
+    "ML_Tahmin":    { ".read": false, ".write": false },
+    "RFID_Kartlar": { ".read": false, ".write": false },
     "MLKomut":      { ".read": true, ".write": true },
     "MLSonuclar":   { ".read": true, ".write": true },
 

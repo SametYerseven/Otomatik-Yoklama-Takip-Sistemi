@@ -3,6 +3,7 @@
 // ==========================================================================
 firebase.initializeApp(firebaseConfig);
 const db = firebase.database();
+const auth = firebase.auth();
 
 let livePresenceData = {}; 
 let liveMLData = {}; // YENİ EKLENDİ
@@ -53,56 +54,97 @@ updateClock();
 // ==========================================================================
 // 4. GİRİŞ İŞLEMİ (LOGIN) & CANLI ÖĞRENCİ DİNLEYİCİSİ
 // ==========================================================================
-document.getElementById('form-login').addEventListener('submit', (e) => {
+// Giris Firebase Authentication (e-posta/sifre) ile yapilir. Ogretmen hesabi
+// TeacherAccounts/{uid} = "kullanici_adi" ile Teachers/{kullanici_adi} profiline baglanir.
+// Bu eslesmeyi sadece Firebase Console'dan yonetici ekler; kurallar bu dugume bakar.
+const AUTH_ERRORS = {
+    'auth/invalid-email': 'E-posta adresi geçersiz.',
+    'auth/user-not-found': 'E-posta veya şifre hatalı!',
+    'auth/wrong-password': 'E-posta veya şifre hatalı!',
+    'auth/invalid-login-credentials': 'E-posta veya şifre hatalı!',
+    'auth/user-disabled': 'Bu hesap devre dışı bırakılmış.',
+    'auth/too-many-requests': 'Çok fazla deneme yapıldı. Biraz bekleyip tekrar deneyin.',
+    'auth/network-request-failed': 'İnternet bağlantısı yok.'
+};
+
+document.getElementById('form-login').addEventListener('submit', async (e) => {
     e.preventDefault();
-    const username = document.getElementById('login-username').value.trim();
+    const email = document.getElementById('login-email').value.trim();
     const pass = document.getElementById('login-password').value;
     const btnLogin = e.target.querySelector('button[type="submit"]');
 
     btnLogin.disabled = true;
     btnLogin.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Giriş yapılıyor...';
 
-    db.ref(`Teachers/${username}`).once('value', (snap) => {
-        if (snap.exists() && snap.val().password === pass) {
-            activeTeacher = snap.val();
-            document.getElementById('teacher-name-display').innerText = activeTeacher.name;
+    try {
+        // Sekme kapaninca oturum kapanir (sinif bilgisayari ortak kullanilabilir)
+        await auth.setPersistence(firebase.auth.Auth.Persistence.SESSION);
+        const cred = await auth.signInWithEmailAndPassword(email, pass);
 
-            db.ref('Classrooms').once('value').then((classroomSnap) => {
-                const selectRoom = document.getElementById('select-room-modal');
-                selectRoom.innerHTML = "";
-                if (classroomSnap.exists()) {
-                    classroomSnap.val().forEach(classroom => {
-                        selectRoom.innerHTML += `<option value="${classroom}">[${classroom}] Numaralı Derslik</option>`;
-                    });
-                }
+        const accountSnap = await db.ref(`TeacherAccounts/${cred.user.uid}`).once('value');
+        if (!accountSnap.exists()) {
+            await auth.signOut();
+            throw { code: 'not-teacher' };
+        }
+        const teacherSnap = await db.ref(`Teachers/${accountSnap.val()}`).once('value');
+        if (!teacherSnap.exists()) {
+            await auth.signOut();
+            throw { code: 'no-profile' };
+        }
 
-                db.ref('Students').on('value', (studentSnap) => {
-                    if (studentSnap.exists()) {
-                        studentPool = studentSnap.val();
-                    } else {
-                        studentPool = {};
-                    }
-                    
-                    if(!document.getElementById('modal-students').classList.contains('hidden')) {
-                        updateStudentListModal();
-                    }
-                    if (lessonStatus !== "IDLE") {
-                        renderTables();
-                    }
-                });
+        activeTeacher = teacherSnap.val();
+        activeTeacher.courses = activeTeacher.courses || [];
+        await openPanel();
+    } catch (err) {
+        let message = AUTH_ERRORS[err.code] || 'Giriş yapılamadı. Lütfen tekrar deneyin.';
+        // SDK 8.10.1 yeni sunucu hatasini tanimiyor, "auth/internal-error" olarak veriyor
+        if (String(err.message || '').includes('INVALID_LOGIN_CREDENTIALS')) message = AUTH_ERRORS['auth/invalid-login-credentials'];
+        if (err.code === 'PERMISSION_DENIED' || String(err.message || '').includes('permission_denied')) { await auth.signOut(); message = 'Veritabanı erişimi reddedildi. Hesap öğretmen olarak tanımlı mı?'; }
+        if (err.code === 'not-teacher') message = 'Bu hesap öğretmen olarak tanımlı değil.';
+        if (err.code === 'no-profile') message = 'Öğretmen profili bulunamadı. Yöneticiye başvurun.';
+        console.error('Giris hatasi:', err);
+        toast(message, 'danger');
+        btnLogin.disabled = false;
+        btnLogin.innerHTML = 'Giriş Yap';
+    }
+});
 
-                renderCourseCards();
-                document.getElementById('screen-login').classList.add('hidden');
-                document.getElementById('screen-main').classList.remove('hidden');
-                toast(`Hoş geldiniz, ${activeTeacher.name}`, 'success');
-            });
+async function openPanel() {
+    document.getElementById('teacher-name-display').innerText = activeTeacher.name;
+
+    const classroomSnap = await db.ref('Classrooms').once('value');
+    const selectRoom = document.getElementById('select-room-modal');
+    selectRoom.innerHTML = "";
+    if (classroomSnap.exists()) {
+        classroomSnap.val().forEach(classroom => {
+            selectRoom.innerHTML += `<option value="${classroom}">[${classroom}] Numaralı Derslik</option>`;
+        });
+    }
+
+    db.ref('Students').on('value', (studentSnap) => {
+        if (studentSnap.exists()) {
+            studentPool = studentSnap.val();
         } else {
-            toast("Kullanıcı adı veya şifre hatalı!", 'danger');
-            btnLogin.disabled = false;
-            btnLogin.innerHTML = 'Giriş Yap';
+            studentPool = {};
+        }
+
+        if(!document.getElementById('modal-students').classList.contains('hidden')) {
+            updateStudentListModal();
+        }
+        if (lessonStatus !== "IDLE") {
+            renderTables();
         }
     });
-});
+
+    renderCourseCards();
+    document.getElementById('screen-login').classList.add('hidden');
+    document.getElementById('screen-main').classList.remove('hidden');
+    toast(`Hoş geldiniz, ${activeTeacher.name}`, 'success');
+}
+
+window.logout = function() {
+    auth.signOut().finally(() => location.reload());
+};
 
 // ==========================================================================
 // 5. DERS KARTLARI
