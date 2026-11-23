@@ -122,12 +122,30 @@ class _AuthScreenState extends State<AuthScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    const Icon(Icons.school, size: 64, color: Colors.indigo),
-                    const SizedBox(height: 8),
-                    Text('Yoklama Sistemi',
-                        textAlign: TextAlign.center,
-                        style: Theme.of(context).textTheme.headlineSmall),
+                    // Logo yazisi koyu gri; karanlik temada da okunsun diye beyaz kart icinde
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 18),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Image.asset('assets/images/cbu_logo.png', height: 72),
+                    ),
                     const SizedBox(height: 24),
+                    Text('Otomatik Yoklama',
+                        textAlign: TextAlign.center,
+                        style: Theme.of(context)
+                            .textTheme
+                            .headlineSmall
+                            ?.copyWith(fontWeight: FontWeight.w800)),
+                    const SizedBox(height: 6),
+                    Text(
+                      'Sınıfa girdiğinde yoklaman otomatik alınır.',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                          color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.65)),
+                    ),
+                    const SizedBox(height: 28),
                     SegmentedButton<bool>(
                       segments: const [
                         ButtonSegment(value: false, label: Text('Giriş yap')),

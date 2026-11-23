@@ -43,7 +43,12 @@ Thumbs.db
 # ==========================================
 # ÇIKTI DOSYALARI
 # ==========================================
-*.png
+# Sadece ML scriptlerinin urettigi grafikler. Genel "*.png" kurali uygulama
+# simgelerini de disarida biraktigi icin yeni klonda uygulama derlenmiyordu.
+ml/**/*.png
 rssi_analysis.png
 # Canli veritabani yedekleri (ogretmen sifreleri iceriyor)
 firebase/backups/
+
+# Word gecici kilit dosyalari
+~$*

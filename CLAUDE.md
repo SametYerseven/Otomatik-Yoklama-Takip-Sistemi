@@ -82,17 +82,29 @@ esp32/legacy_gatt/           ESKİ GATT tabanlı sistem (legacy_gatt.ino + confi
                              referans, yeni geliştirmede kullanılmıyor
 mobile/                      Flutter projesi (paket adı com.example.attendance_system);
                              sadece android/ ve ios/ platformları var
-  lib/main.dart              Firebase'i başlatır, AuthGate'i açar
-  lib/auth_gate.dart         Giriş yok → AuthScreen; giriş var → DeviceSetup (anahtar) → BeaconScreen
-  lib/auth_screen.dart       Giriş / kayıt / şifre sıfırlama formu
+  lib/main.dart              Firebase'i ve demo ayarlarını başlatır, açık/karanlık tema, AuthGate
+  lib/theme.dart             Renkler (CBÜ logosundan: lacivert #284090, mavi #0090D0, kırmızı #D02030)
+  lib/auth_gate.dart         Giriş yok → AuthScreen; giriş var → DeviceSetup (anahtar) → HomeShell
+  lib/auth_screen.dart       Logolu giriş / kayıt / şifre sıfırlama formu
   lib/student_service.dart   Firebase Auth + RTDB + anahtar kanalı; kayıt ve cihaz eşleştirme mantığı
-  lib/beacon_screen.dart     İzinler, görülen beacon'lar, giriş/çıkış geçmişi, çıkış butonu
+  lib/beacon_controller.dart Kotlin beacon kanalını dinleyen tek nokta (ChangeNotifier): izinler,
+                             görülen beacon'lar, giriş/çıkış geçmişi, sınıfta mı
+  lib/demo_data.dart         Demo modu ayarları (shared_preferences) + örnek ders programı/yoklamalar
+  lib/screens/               home_shell (alt menü), home (durum + sonraki ders), stats, profile,
+                             developer (RSSI listesi + demo anahtarları)
+  lib/widgets/common.dart    Halka grafik, ilerleme çubuğu, etiket (grafik paketi yok)
+  assets/images/             cbu_logo.png, cbu_emblem.png (uygulama simgeleri de amblemden üretildi)
   android/app/src/main/AndroidManifest.xml
   android/app/src/main/kotlin/com/example/attendance_system/
     BeaconApp.kt             Application sınıfı; AltBeacon ile arka plan tarama, bildirimler
     MainActivity.kt          Flutter <-> Kotlin köprüsü (MethodChannel/EventChannel)
     StudentKeyStore.kt       Gizli HMAC anahtarı: üretme, Android Keystore'a aktarma, sign()
-web/                         Öğretmen paneli (HTML/JS, Firebase JS SDK v8, SheetJS ile Excel)
+web/                         Öğretmen paneli (HTML/JS, Firebase JS SDK v8, SheetJS ile Excel).
+                             Açık tema + CBÜ laciverti. Görünümler: Genel Bakış, Derslerim, Aktif
+                             Yoklama (öğrenci kartları), Uyarılar; öğrenci detay penceresi.
+                             app.js'te tüm DB işlemleri `Store` üzerinden; `?demo=1` ile bellekteki
+                             örnek verilerle açılır, Firebase'e bağlanmaz/yazmaz, config.js gerekmez.
+                             RFID kaldırıldı (kapsam dışı).
 firebase/database.json       Örnek başlangıç verisi
 firebase/database.rules.json RTDB kuralları (Console → Realtime Database → Kurallar'a elle yapıştırılır)
 ml/ml_pipeline/              Visual Studio çözümü (ml_pipeline.slnx)
@@ -152,6 +164,20 @@ eklerken `esp32/<ad>/<ad>.ino` düzenini koru.
   olmalı. Kayıt sürerken de `AuthScreen` gösterilir, çünkü Firebase kullanıcıyı profil yazılmadan
   "giriş yaptı" sayar; form kapanırsa kayıt hatası (or. numara kullanımda) kaybolur.
   Bu iki hata önce sadece telefonda görüldü (derleme/analiz yakalamadı).
+
+## Arayüz notları
+
+- Ders programı, istatistikler ve geçmiş yoklamalar için veritabanında henüz düğüm yok; ekranlar
+  **demo modunda** örnek veriyle dolar (mobil: Profil → Geliştirici → "Demo verilerini göster";
+  web: `?demo=1`). Ekranda "DEMO" etiketi yok (kullanıcı kararı); rapordaki şekil açıklamalarında
+  örnek veri olduğu belirtilmeli. Demo verisindeki öğrenci adları kurgusal.
+- Mobilde giriş/çıkış ve sınıf bilgisi beacon'dan gerçek; ders adı/program demo.
+- Yeni grafik/görsel paketi eklenmedi (compileSdk riski); grafikler CustomPainter / CSS ile.
+- `.gitignore`'daki genel `*.png` kuralı `ml/**/*.png` yapıldı; eskiden uygulama simgeleri
+  hiç commit edilmediği için yeni klonda Android derlemesi "ic_launcher not found" veriyordu.
+- iOS'ta katılım süresi: bölge izleme sınıfa girişte uygulamayı uyandırır, ders süresince arka
+  plan konum oturumu (düşük hassasiyet) açılarak ranging sürdürülür, çıkışta kapatılır; oturum
+  kesilirse giriş-çıkış zamanından yedek hesap (karar 2026-11-22, Mac ile denenmedi).
 
 ## Geliştirme ortamı (Windows)
 

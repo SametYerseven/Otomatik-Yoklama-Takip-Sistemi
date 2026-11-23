@@ -2,14 +2,14 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
 import 'auth_screen.dart';
-import 'beacon_screen.dart';
+import 'screens/home_shell.dart';
 import 'student_service.dart';
 
 /// Uygulamanin giris kapisi: kimin giris yaptigina gore hangi ekranin
 /// gosterilecegine karar verir.
 ///
 ///   giris yok / kayit suruyor -> AuthScreen (giris / kayit)
-///   giris var                 -> DeviceSetup (anahtar kontrolu) -> BeaconScreen
+///   giris var                 -> DeviceSetup (anahtar kontrolu) -> HomeShell
 class AuthGate extends StatelessWidget {
   const AuthGate({super.key});
 
@@ -81,7 +81,7 @@ class _DeviceSetupState extends State<DeviceSetup> {
         final result = snapshot.data!;
         switch (result.status) {
           case DeviceStatus.ready:
-            return BeaconScreen(profile: result.profile!);
+            return HomeShell(profile: result.profile!);
           case DeviceStatus.boundToOtherStudent:
             return const _Problem(
               title: 'Bu telefon başka bir öğrenciye kayıtlı',

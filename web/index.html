@@ -3,208 +3,218 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MCBÜ - Dijital Yoklama Sistemi</title>
-    
+    <title>MCBÜ - Otomatik Yoklama Paneli</title>
+    <link rel="icon" type="image/png" href="assets/favicon.png">
+
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
 
-    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="style.css">
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 </head>
-<body class="dark-mode">
+<body>
 
-    <!-- LOGIN EKRANI -->
-    <div id="screen-login" class="login-overlay">
-        <div class="login-box">
-            <div class="login-logo-container">
-                <i class="fa-solid fa-graduation-cap"></i>
-                <h2>Öğretmen Giriş Paneli</h2>
-                <p>Sisteme erişmek için bilgilerinizi giriniz.</p>
+    <!-- ============================ GİRİŞ EKRANI ============================ -->
+    <div id="screen-login" class="login-screen">
+        <div class="login-brand">
+            <div class="login-logo-card"><img src="assets/cbu_logo.png" alt="Manisa Celal Bayar Üniversitesi"></div>
+            <h1>Otomatik Yoklama<br>Takip Sistemi</h1>
+            <p>Öğrenciler sınıfa girdiğinde yoklama kendiliğinden alınır; derste ne kadar kaldıkları canlı olarak izlenir.</p>
+            <ul class="login-features">
+                <li><i class="fa-solid fa-tower-broadcast"></i> BLE işaretçisi ile temassız algılama</li>
+                <li><i class="fa-solid fa-shield-halved"></i> Kriptografik kimlik doğrulama</li>
+                <li><i class="fa-solid fa-chart-line"></i> Katılım süresi ve devam istatistikleri</li>
+            </ul>
+        </div>
+        <div class="login-form-side">
+            <div class="login-box">
+                <h2>Öğretmen Girişi</h2>
+                <p class="muted">Panele erişmek için kurum hesabınızla giriş yapın.</p>
+                <form id="form-login">
+                    <div class="form-group">
+                        <label for="login-email">E-posta</label>
+                        <div class="input-icon"><i class="fa-regular fa-envelope"></i>
+                            <input type="email" id="login-email" placeholder="ad.soyad@cbu.edu.tr" autocomplete="username" required>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="login-password">Şifre</label>
+                        <div class="input-icon"><i class="fa-solid fa-lock"></i>
+                            <input type="password" id="login-password" placeholder="••••••••" autocomplete="current-password" required>
+                        </div>
+                    </div>
+                    <button type="submit" class="btn btn-primary btn-block">Giriş Yap</button>
+                </form>
+                <a class="demo-link" href="?demo=1"><i class="fa-solid fa-flask"></i> Örnek verilerle incele (demo)</a>
             </div>
-            <form id="form-login">
-                <div class="form-group">
-                    <label><i class="fa-solid fa-envelope"></i> E-Posta</label>
-                    <input type="email" id="login-email" placeholder="Örn: ad.soyad@cbu.edu.tr" autocomplete="username" required>
-                </div>
-                <div class="form-group">
-                    <label><i class="fa-solid fa-lock"></i> Şifre</label>
-                    <input type="password" id="login-password" placeholder="••••••••" autocomplete="current-password" required>
-                </div>
-                <button type="submit" class="btn-primary">Giriş Yap</button>
-            </form>
         </div>
     </div>
 
-    <!-- ANA PORTAL -->
+    <!-- ============================ ANA PANEL ============================ -->
     <div id="screen-main" class="app-layout hidden">
-        
-        <!-- SOL MENÜ -->
+
         <aside class="sidebar">
-            <div class="sidebar-brand">
-                <i class="fa-solid fa-tower-broadcast"></i>
-                <div>
-                    <h4>MCBÜ</h4>
-                    <span>Dijital Yoklama Sistemi</span>
-                </div>
-            </div>
-            <ul class="sidebar-nav">
-                <li><a href="#" class="active" id="nav-courses"><i class="fa-solid fa-book"></i> Derslerim</a></li>
-                <li><a href="#" id="nav-attendance" class="disabled"><i class="fa-solid fa-clipboard-user"></i> Aktif Yoklama</a></li>
-                <li><a href="#" onclick="toast('Takvim özelliği yakında eklenecek.', 'info'); return false;"><i class="fa-solid fa-calendar-days"></i> Takvim</a></li>
-                <li><a href="#" onclick="toast('Ayarlar özelliği yakında eklenecek.', 'info'); return false;"><i class="fa-solid fa-gear"></i> Ayarlar</a></li>
-            </ul>
+            <div class="sidebar-brand"><img src="assets/cbu_logo.png" alt="MCBÜ"></div>
+            <nav class="sidebar-nav">
+                <a href="#" data-view="dashboard" class="active"><i class="fa-solid fa-gauge-high"></i> Genel Bakış</a>
+                <a href="#" data-view="courses"><i class="fa-solid fa-book-open"></i> Derslerim</a>
+                <a href="#" data-view="attendance" class="disabled" id="nav-attendance"><i class="fa-solid fa-clipboard-user"></i> Aktif Yoklama <span class="live-dot hidden" id="nav-live-dot"></span></a>
+                <a href="#" data-view="alerts"><i class="fa-solid fa-triangle-exclamation"></i> Uyarılar <span class="nav-badge hidden" id="nav-alert-count">0</span></a>
+            </nav>
             <div class="sidebar-footer">
-                <a href="#" onclick="logout(); return false;"><i class="fa-solid fa-right-from-bracket"></i> Çıkış Yap</a>
+                <a href="#" id="btn-logout"><i class="fa-solid fa-right-from-bracket"></i> Çıkış Yap</a>
             </div>
         </aside>
 
-        <!-- SAĞ İÇERİK ALANI -->
         <div class="main-content">
             <header class="topbar">
-                <div class="topbar-left">
-                    <h2 id="page-title">Derslerim</h2>
-                    <p id="page-subtitle">Kayıtlı olduğunuz derslerin güncel listesi.</p>
+                <div>
+                    <h2 id="page-title">Genel Bakış</h2>
+                    <p id="page-subtitle" class="muted"></p>
                 </div>
                 <div class="topbar-right">
-                    <div class="topbar-badge"><span class="highlight-green">Aktif Dönem</span> 2025-2026 Bahar</div>
-                    <div class="topbar-badge"><i class="fa-regular fa-clock"></i> <span id="realtime-clock">00:00</span></div>
+                    <span class="chip chip-navy"><i class="fa-regular fa-calendar"></i> <span id="term-label"></span></span>
+                    <span class="chip"><i class="fa-regular fa-clock"></i> <span id="realtime-clock">00:00</span></span>
                     <div class="user-profile">
-                        <div class="avatar"><i class="fa-solid fa-user"></i></div>
-                        <div class="user-info">
-                            <h4 id="teacher-name-display">Yükleniyor...</h4>
-                            <span>Akademisyen</span>
+                        <div class="avatar" id="teacher-initials">–</div>
+                        <div>
+                            <strong id="teacher-name-display">Yükleniyor...</strong>
+                            <span class="muted">Öğretim Elemanı</span>
                         </div>
                     </div>
                 </div>
             </header>
 
-            <!-- DERSLERİM GÖRÜNÜMÜ -->
-            <div id="view-courses" class="content-view">
-                <div class="search-bar-container">
+            <!-- GENEL BAKIŞ -->
+            <section id="view-dashboard" class="content-view">
+                <div class="stat-grid" id="dashboard-stats"></div>
+                <div class="grid-2">
+                    <div class="panel">
+                        <div class="panel-head"><h3><i class="fa-solid fa-chart-column"></i> Ders bazında devam oranı</h3><span class="muted small">%70 devam şartı</span></div>
+                        <div id="dashboard-course-chart" class="bar-chart"></div>
+                    </div>
+                    <div class="panel">
+                        <div class="panel-head"><h3><i class="fa-regular fa-calendar-check"></i> Bugünkü dersler</h3></div>
+                        <div id="dashboard-today"></div>
+                    </div>
+                </div>
+                <div class="panel">
+                    <div class="panel-head"><h3><i class="fa-solid fa-user-clock"></i> Devamsızlık sınırına yaklaşan öğrenciler</h3></div>
+                    <div id="dashboard-risk"></div>
+                </div>
+            </section>
+
+            <!-- DERSLERİM -->
+            <section id="view-courses" class="content-view hidden">
+                <div class="search-bar">
                     <i class="fa-solid fa-magnifying-glass"></i>
-                    <input type="text" placeholder="Kod veya ders adına göre ara...">
+                    <input type="text" id="course-search" placeholder="Kod veya ders adına göre ara...">
                 </div>
-                <div class="course-grid" id="course-grid-container"></div>
-            </div>
+                <div class="course-grid" id="course-grid"></div>
+            </section>
 
-            <!-- AKTİF YOKLAMA GÖRÜNÜMÜ -->
-            <div id="view-attendance" class="content-view hidden">
-                <div class="attendance-header-card">
+            <!-- AKTİF YOKLAMA -->
+            <section id="view-attendance" class="content-view hidden">
+                <div class="session-header">
                     <div>
-                        <span class="badge-blue" id="dyn-course-code">DERS KODU</span>
+                        <span class="chip chip-navy" id="dyn-course-code">DERS</span>
                         <h2 id="dyn-course-name">Ders Adı</h2>
-                        <p><i class="fa-solid fa-location-dot"></i> <span id="dyn-room-name">Sınıf</span> | Sinyal Dinleniyor <span class="status-dot"></span></p>
+                        <p class="muted">
+                            <i class="fa-solid fa-location-dot"></i> <span id="dyn-room-name">Sınıf</span>
+                            &nbsp;·&nbsp; <i class="fa-solid fa-stopwatch"></i> <span id="lesson-timer">00:00</span>
+                            &nbsp;·&nbsp; <span class="live-dot"></span> Sinyal dinleniyor
+                        </p>
                     </div>
-                    <div class="attendance-actions">
-                        <button id="btn-show-students" class="btn-secondary"><i class="fa-solid fa-users"></i> Kayıtlı Öğrenciler</button>
-                        <button id="btn-toggle-rfid" class="btn" style="background-color: var(--warning); color: white;">
-    <i class="fa-solid fa-id-card"></i> Kart Okutma İzni: KAPALI
-</button>
-                        <div id="attendance-status-badge" class="status-indicator in-progress">
-                            <i class="fa-solid fa-door-open"></i> GİRİŞ AÇIK
-                        </div>
-                        <button id="btn-take-exit-attendance" class="btn-warning"><i class="fa-solid fa-right-from-bracket"></i> Çıkış Al</button>
-                        <button id="btn-end-class" class="btn-danger" disabled><i class="fa-solid fa-flag-checkered"></i> Dersi Bitir</button>
-                        <button id="btn-export" class="btn-success"><i class="fa-solid fa-file-excel"></i> Rapor</button>
-                    </div>
-                </div>
-
-                <div class="split-layout">
-                    <!-- 1. KOLON: GİRİŞ -->
-                    <div class="table-panel">
-                        <div class="panel-head border-green">
-                            <h3><i class="fa-solid fa-arrow-right-to-bracket"></i> Giriş Yapanlar</h3>
-                            <span class="count" id="checkin-count">0</span>
-                        </div>
-                        <table class="modern-table">
-                            <thead><tr><th>Öğrenci No</th><th>Ad Soyad</th></tr></thead>
-                            <tbody id="tbody-checkin"><tr><td colspan="2" class="empty-state">Bekleniyor...</td></tr></tbody>
-                        </table>
-                    </div>
-
-                    <!-- 2. KOLON: ÇIKIŞ -->
-                    <div class="table-panel">
-                        <div class="panel-head border-orange">
-                            <h3><i class="fa-solid fa-arrow-right-from-bracket"></i> Çıkış Yapanlar</h3>
-                            <span class="count" id="checkout-count">0</span>
-                        </div>
-                        <table class="modern-table">
-                            <thead><tr><th>Öğrenci No</th><th>Ad Soyad</th></tr></thead>
-                            <tbody id="tbody-checkout"><tr><td colspan="2" class="empty-state">Çıkış başlamadı.</td></tr></tbody>
-                        </table>
-                    </div>
-
-                    <!-- 3. KOLON: GENEL ÖZET -->
-                    <div class="table-panel">
-                        <div class="panel-head border-blue">
-                            <h3><i class="fa-solid fa-clipboard-list"></i> Sınıf Yoklama Özeti</h3>
-                            <div>
-                                <span class="count bg-success" style="margin-right: 5px;" id="summary-present-count">0</span>
-                                <span class="count bg-danger" id="summary-absent-count">0</span>
-                            </div>
-                        </div>
-                        <table class="modern-table">
-                            <thead><tr><th>Öğrenci No</th><th>Ad Soyad</th><th>Nihai Durum</th></tr></thead>
-                            <tbody id="tbody-summary"><tr><td colspan="3" class="empty-state">Yükleniyor...</td></tr></tbody>
-                        </table>
+                    <div class="session-actions">
+                        <span id="attendance-status-badge" class="status-pill status-open"><i class="fa-solid fa-door-open"></i> Giriş açık</span>
+                        <button id="btn-show-students" class="btn btn-light"><i class="fa-solid fa-users"></i> Öğrenciler</button>
+                        <button id="btn-take-exit" class="btn btn-warning"><i class="fa-solid fa-right-from-bracket"></i> Çıkış Al</button>
+                        <button id="btn-end-class" class="btn btn-danger" disabled><i class="fa-solid fa-flag-checkered"></i> Dersi Bitir</button>
+                        <button id="btn-export" class="btn btn-success"><i class="fa-solid fa-file-excel"></i> Excel</button>
                     </div>
                 </div>
-            </div>
+
+                <div class="stat-grid stat-grid-4" id="session-stats"></div>
+
+                <div class="filter-row">
+                    <div class="filter-chips" id="student-filter">
+                        <button data-filter="all" class="active">Tümü</button>
+                        <button data-filter="in">Sınıfta</button>
+                        <button data-filter="left">Ayrıldı</button>
+                        <button data-filter="absent">Gelmedi</button>
+                    </div>
+                    <div class="search-bar search-bar-sm">
+                        <i class="fa-solid fa-magnifying-glass"></i>
+                        <input type="text" id="student-search" placeholder="Öğrenci ara...">
+                    </div>
+                </div>
+                <div class="student-grid" id="student-grid"></div>
+            </section>
+
+            <!-- UYARILAR -->
+            <section id="view-alerts" class="content-view hidden">
+                <div class="panel">
+                    <div class="panel-head"><h3><i class="fa-solid fa-robot"></i> Şüpheli katılım uyarıları</h3><span class="muted small">Makine öğrenmesi ve sinyal analizine göre</span></div>
+                    <div id="alerts-list"></div>
+                </div>
+            </section>
         </div>
     </div>
 
-    <!-- SINIF SEÇİM MODALI -->
+    <!-- SINIF SEÇİMİ -->
     <div id="modal-room-select" class="modal-overlay hidden">
         <div class="modal-box">
-            <h3>Ders Oturumunu Başlat</h3>
-            <p id="modal-course-title" style="margin-bottom: 20px; color: #9ca3af; font-size: 0.9rem;"></p>
+            <h3>Ders oturumunu başlat</h3>
+            <p id="modal-course-title" class="muted"></p>
             <div class="form-group">
-                <label>Fiziksel Sınıf / Laboratuvar Seçin</label>
-                <select id="select-room-modal"></select>
+                <label for="select-room">Derslik</label>
+                <select id="select-room"></select>
             </div>
             <div class="modal-actions">
-                <button id="btn-cancel-modal" class="btn-secondary">İptal</button>
-                <button id="btn-confirm-start" class="btn-primary">Sınıfı Aktif Et</button>
+                <button id="btn-cancel-room" class="btn btn-light">İptal</button>
+                <button id="btn-confirm-start" class="btn btn-primary"><i class="fa-solid fa-play"></i> Yoklamayı Başlat</button>
             </div>
         </div>
     </div>
 
-    <!-- ÖĞRENCİ YÖNETİM MODALI -->
+    <!-- ÖĞRENCİ YÖNETİMİ -->
     <div id="modal-students" class="modal-overlay hidden">
-        <div class="modal-box" style="max-width: 520px;">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
-                <h3 style="margin: 0;">Kayıtlı Öğrenciler</h3>
-                <span id="modal-student-count" style="font-size: 0.8rem; color: var(--text-muted); background: var(--bg-hover); padding: 4px 10px; border-radius: 20px;">0 öğrenci</span>
+        <div class="modal-box modal-wide">
+            <div class="modal-title-row">
+                <h3>Kayıtlı öğrenciler</h3>
+                <span class="chip" id="modal-student-count">0 öğrenci</span>
             </div>
-            <div class="form-group" style="display: flex; gap: 8px;">
-                <input type="text" id="new-student-no" placeholder="Öğrenci No" style="flex: 1; min-width: 0;">
-                <input type="text" id="new-student-name" placeholder="Ad Soyad" style="flex: 2; min-width: 0;">
-                <button id="btn-add-student" class="btn-primary" style="width: auto; white-space: nowrap;">
-                    <i class="fa-solid fa-plus"></i> Ekle
-                </button>
+            <div class="inline-form">
+                <input type="text" id="new-student-no" placeholder="Öğrenci No">
+                <input type="text" id="new-student-name" placeholder="Ad Soyad">
+                <button id="btn-add-student" class="btn btn-primary"><i class="fa-solid fa-plus"></i> Ekle</button>
             </div>
-            <div style="max-height: 320px; overflow-y: auto; margin-top: 10px; border-top: 1px solid var(--border-color); border-radius: 0 0 8px 8px;">
+            <div class="table-scroll">
                 <table class="modern-table">
-                    <thead id="modal-student-thead">
-                        <tr>
-                            <th>Öğrenci No</th>
-                            <th>Ad Soyad</th>
-                            <th style="text-align:right; padding-right:15px">Sil</th>
-                        </tr>
-                    </thead>
+                    <thead id="modal-student-thead"></thead>
                     <tbody id="modal-student-list"></tbody>
                 </table>
             </div>
-            <div class="modal-actions" style="margin-top: 15px;">
-                <button id="btn-close-students" class="btn-secondary" style="width: 100%;">Kapat</button>
+            <div class="modal-actions">
+                <button id="btn-close-students" class="btn btn-light btn-block">Kapat</button>
             </div>
         </div>
     </div>
 
-    <script src="config.js"></script>
+    <!-- ÖĞRENCİ DETAYI -->
+    <div id="modal-student-detail" class="modal-overlay hidden">
+        <div class="modal-box modal-wide" id="student-detail-body"></div>
+    </div>
+
+    <script>
+        // Demo modunda config.js gerekmez; gercek modda Firebase ayarlari bu dosyadan gelir
+        if (!new URLSearchParams(location.search).has('demo')) {
+            document.write('<script src="config.js"><\/script>');
+        }
+    </script>
     <script src="app.js"></script>
 </body>
 </html>
