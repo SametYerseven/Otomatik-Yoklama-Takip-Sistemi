@@ -334,6 +334,7 @@ if (DEMO) {
 const VIEW_TITLES = {
     dashboard: ['Genel Bakış', 'Bugünkü dersler ve dönem devam durumu'],
     courses: ['Derslerim', 'Yoklamasını başlatmak istediğiniz dersi seçin'],
+    students: ['Öğrenciler', 'Kayıtlı öğrenciler; detay ve cihaz sıfırlama için öğrenciye tıklayın'],
     attendance: ['Aktif Yoklama', 'Öğrenciler sınıfa girdikçe otomatik olarak listelenir'],
     alerts: ['Uyarılar', 'İncelenmesi önerilen katılım durumları'],
 };
@@ -358,6 +359,7 @@ function render() {
     renderAlertBadge();
     if (state.view === 'dashboard') renderDashboard();
     if (state.view === 'courses') renderCourses();
+    if (state.view === 'students') renderStudents();
     if (state.view === 'attendance') renderAttendance();
     if (state.view === 'alerts') renderAlerts();
 }
@@ -822,6 +824,48 @@ function renderStudentModal() {
         try { await Store.deleteStudent(no); toast('Öğrenci silindi.', 'warning'); } catch { toast('Firebase bağlantı hatası.', 'danger'); }
     }));
 }
+
+// ==========================================================================
+// OGRENCILER SEKMESI (ders olmasa da acik; detay ve cihaz sifirlama buradan)
+// ==========================================================================
+function renderStudents() {
+    const q = $('students-search').value.trim().toLocaleLowerCase('tr-TR');
+    const all = Object.entries(state.studentPool);
+    const rows = all
+        .filter(([no, name]) => no.includes(q) || String(name).toLocaleLowerCase('tr-TR').includes(q))
+        .sort((a, b) => a[0].localeCompare(b[0]));
+    $('students-count').innerText = `${all.length} öğrenci`;
+    if (rows.length === 0) {
+        $('students-list').innerHTML = `<tr><td colspan="3">${emptyState('fa-users', all.length ? 'Aramaya uyan öğrenci yok.' : 'Kayıtlı öğrenci yok.')}</td></tr>`;
+        return;
+    }
+    $('students-list').innerHTML = rows.map(([no, name]) =>
+        `<tr class="clickable" data-student="${esc(no)}"><td><strong>${esc(no)}</strong></td><td>${esc(name)}</td>
+         <td style="text-align:right"><button class="btn-icon" data-delete="${esc(no)}" title="Öğrenciyi sil"><i class="fa-solid fa-trash-can"></i></button></td></tr>`).join('');
+    $('students-list').querySelectorAll('[data-student]').forEach((r) => r.addEventListener('click', () => openStudentDetail(r.dataset.student)));
+    $('students-list').querySelectorAll('[data-delete]').forEach((b) => b.addEventListener('click', async (e) => {
+        e.stopPropagation();   // tiklama satira gitmesin (detay penceresi acilmasin)
+        const no = b.dataset.delete;
+        if (!confirm(`"${state.studentPool[no]}" (${no}) kalıcı olarak silinecek. Emin misiniz?`)) return;
+        try { await Store.deleteStudent(no); toast('Öğrenci silindi.', 'warning'); } catch { toast('Firebase bağlantı hatası.', 'danger'); }
+    }));
+}
+$('students-search').addEventListener('input', renderStudents);
+
+$('btn-students-add').addEventListener('click', async () => {
+    const no = $('students-new-no').value.trim();
+    const name = $('students-new-name').value.trim();
+    if (!no || !name) { toast('Öğrenci no ve adını eksiksiz girin.', 'warning'); return; }
+    // Mobil uygulamanin kurali da 6-12 rakam istiyor (StudentNumbers)
+    if (!/^[0-9]{6,12}$/.test(no)) { toast('Öğrenci numarası 6–12 haneli bir sayı olmalı.', 'warning'); return; }
+    if (state.studentPool[no]) { toast(`${no} numaralı öğrenci zaten kayıtlı.`, 'warning'); return; }
+    try {
+        await Store.addStudent(no, name);
+        $('students-new-no').value = '';
+        $('students-new-name').value = '';
+        toast(`${name} eklendi.`, 'success');
+    } catch { toast('Firebase bağlantı hatası.', 'danger'); }
+});
 
 // ==========================================================================
 // EXCEL RAPORU

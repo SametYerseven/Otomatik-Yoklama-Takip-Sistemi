@@ -180,6 +180,14 @@ class StudentService {
         return DeviceCheckResult(DeviceStatus.boundToOtherStudent, profile);
       }
       if (hasKey && boundUid == user.uid) {
+        if (data['keyCreatedAt'] != null) {
+          return DeviceCheckResult(DeviceStatus.ready, profile);
+        }
+        // Ogretmen paneli cihazi sifirlamis: sunucudaki kopya silinmis,
+        // telefondaki anahtar artik gecersiz. Eskisini sil, yenisini olustur.
+        // (Kotlin createKey, telefonda anahtar varken yenisini uretmez.)
+        await _keyChannel.invokeMethod('deleteKey');
+        await _createKey(profile);
         return DeviceCheckResult(DeviceStatus.ready, profile);
       }
       if (data['keyCreatedAt'] != null) {

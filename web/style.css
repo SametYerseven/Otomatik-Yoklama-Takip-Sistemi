@@ -222,6 +222,10 @@ input:focus, select:focus { border-color: var(--navy); box-shadow: 0 0 0 3px rgb
 .inline-form { display: flex; gap: 8px; }
 .inline-form input:first-child { flex: 1; }
 .inline-form input:nth-child(2) { flex: 2; }
+.students-toolbar { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 14px; }
+.students-toolbar .search-bar { flex: 1; min-width: 220px; }
+.students-toolbar .inline-form { flex: 1; min-width: 360px; }
+.students-toolbar .inline-form input:first-child { min-width: 130px; }
 .table-scroll { max-height: 320px; overflow-y: auto; border: 1px solid var(--border); border-radius: 12px; }
 
 .detail-head { display: flex; gap: 14px; align-items: center; }

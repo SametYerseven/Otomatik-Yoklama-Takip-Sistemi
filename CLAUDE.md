@@ -41,7 +41,7 @@ derste ne kadar kaldığının takip edilmesi. Bileşenler: ESP32 (sınıfta), F
 | 3 | Dönen sınıf kodu (ESP32), öğrenci kodu (telefon), Cloud Functions doğrulaması, `Presence`'a yazma | Yapılmadı |
 | — | iOS (Swift + CoreLocation) | Yapılmadı, Mac gerekiyor |
 | — | Öğretmen paneline Firebase Auth | **Tamamlandı** (2026-11-18): e-posta/şifre girişi, `TeacherAccounts` eşlemesi, sıkı kurallar Firebase'de yayında. Şimdilik iki test hesabı, ikisi de `osman_altay`'a bağlı: Samet'in hesabı ve Talha'nın 2026-11-24'te açtığı test öğretmen hesabı. Gerçek öğretmen hesapları açılınca ikisi de silinmeli (Authentication → Users ve `TeacherAccounts/{uid}`) |
-| — | Öğretmen paneline "Cihazı sıfırla" | **Tamamlandı** (2026-11-24): öğrenci detay penceresinde; kurallar Firebase'de yayında. Gerçek hesapla giriş çalışıyor; butonun gerçek öğrenci üzerinde denenmesi bekleniyor |
+| — | Öğretmen paneline "Cihazı sıfırla" | **Tamamlandı** (2026-11-24): panelde her zaman açık "Öğrenciler" sekmesi → öğrenci detayı → buton; kurallar Firebase'de yayında. Aynı telefonda sıfırlanırsa uygulama bir sonraki açılışta anahtarı yeniler. Mobil kısmın telefonda denenmesi bekleniyor |
 
 Şu an telefon beacon'u duyup sadece kendi ekranında/bildiriminde gösteriyor; yoklama için
 Firebase'e bir şey göndermiyor (sadece kayıt/giriş verisi yazıyor). ESP32 de Firebase/Wi-Fi
@@ -100,8 +100,9 @@ mobile/                      Flutter projesi (paket adı com.example.attendance_
     MainActivity.kt          Flutter <-> Kotlin köprüsü (MethodChannel/EventChannel)
     StudentKeyStore.kt       Gizli HMAC anahtarı: üretme, Android Keystore'a aktarma, sign()
 web/                         Öğretmen paneli (HTML/JS, Firebase JS SDK v8, SheetJS ile Excel).
-                             Açık tema + CBÜ laciverti. Görünümler: Genel Bakış, Derslerim, Aktif
-                             Yoklama (öğrenci kartları), Uyarılar; öğrenci detay penceresi.
+                             Açık tema + CBÜ laciverti. Görünümler: Genel Bakış, Derslerim,
+                             Öğrenciler (liste, ekle/sil), Aktif Yoklama (öğrenci kartları), Uyarılar;
+                             öğrenci detay penceresi (Cihazı sıfırla).
                              app.js'te tüm DB işlemleri `Store` üzerinden; `?demo=1` ile bellekteki
                              örnek verilerle açılır, Firebase'e bağlanmaz/yazmaz, config.js gerekmez.
                              RFID kaldırıldı (kapsam dışı).
@@ -251,7 +252,9 @@ Aşama 2 ile eklenen (mobil uygulama yazar; `{uid}` = Firebase Auth uid):
   Telefon değiştiren öğrenci için öğretmen panelinde öğrenci detayı → **"Cihazı sıfırla"**:
   `StudentNumbers/{no}` → uid bulunur, bu düğüm ve `StudentAccounts/{uid}/keyCreatedAt` silinir;
   öğrenci yeni telefondan girince uygulama yeni anahtar üretir, eski telefonun anahtarı geçersiz
-  kalır. Kurallar öğretmene bu iki yerde **sadece silme** izni verir (okuma/yazma yok). Bir
+  kalır. Aynı telefonda sıfırlanırsa `prepareDevice` (uygulama açılışı) telefonda anahtar olduğu
+  hâlde `keyCreatedAt` yoksa eski anahtarı silip yenisini üretir. Bu kontrol arka plandaki Kotlin
+  taramasında yok: Aşama 3'te sunucu "anahtar yok" derse Kotlin de aynı yenilemeyi yapmalı. Kurallar öğretmene bu iki yerde **sadece silme** izni verir (okuma/yazma yok). Bir
   öğrenciyi silerken üst düğümü değil, altındaki uid'i sil.
 - Cloud Functions (Aşama 3) öğrenciyi uid → `StudentAccounts.studentNo` → `StudentNumbers`
   zinciriyle doğrulamalı; `StudentSecrets`'ın varlığı tek başına yeterli değil.

@@ -61,6 +61,7 @@
             <nav class="sidebar-nav">
                 <a href="#" data-view="dashboard" class="active"><i class="fa-solid fa-gauge-high"></i> Genel Bakış</a>
                 <a href="#" data-view="courses"><i class="fa-solid fa-book-open"></i> Derslerim</a>
+                <a href="#" data-view="students"><i class="fa-solid fa-users"></i> Öğrenciler</a>
                 <a href="#" data-view="attendance" class="disabled" id="nav-attendance"><i class="fa-solid fa-clipboard-user"></i> Aktif Yoklama <span class="live-dot hidden" id="nav-live-dot"></span></a>
                 <a href="#" data-view="alerts"><i class="fa-solid fa-triangle-exclamation"></i> Uyarılar <span class="nav-badge hidden" id="nav-alert-count">0</span></a>
             </nav>
@@ -152,6 +153,28 @@
                     </div>
                 </div>
                 <div class="student-grid" id="student-grid"></div>
+            </section>
+
+            <!-- ÖĞRENCİLER -->
+            <section id="view-students" class="content-view hidden">
+                <div class="panel">
+                    <div class="panel-head"><h3><i class="fa-solid fa-users"></i> Kayıtlı öğrenciler</h3><span class="muted small" id="students-count"></span></div>
+                    <div class="students-toolbar">
+                        <div class="search-bar">
+                            <i class="fa-solid fa-magnifying-glass"></i>
+                            <input type="text" id="students-search" placeholder="No veya ada göre ara...">
+                        </div>
+                        <div class="inline-form">
+                            <input type="text" id="students-new-no" placeholder="Öğrenci No" inputmode="numeric">
+                            <input type="text" id="students-new-name" placeholder="Ad Soyad">
+                            <button id="btn-students-add" class="btn btn-primary"><i class="fa-solid fa-plus"></i> Ekle</button>
+                        </div>
+                    </div>
+                    <table class="modern-table">
+                        <thead><tr><th>Öğrenci No</th><th>Ad Soyad</th><th style="text-align:right">Sil</th></tr></thead>
+                        <tbody id="students-list"></tbody>
+                    </table>
+                </div>
             </section>
 
             <!-- UYARILAR -->
