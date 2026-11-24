@@ -229,6 +229,9 @@ input:focus, select:focus { border-color: var(--navy); box-shadow: 0 0 0 3px rgb
 .detail-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
 .detail-stats div { background: var(--bg); border-radius: 12px; padding: 12px; }
 .detail-stats strong { display: block; font-size: 20px; }
+.device-reset { display: flex; align-items: center; gap: 16px; border-top: 1px solid var(--border); padding-top: 16px; }
+.device-reset .grow { flex: 1; }
+.device-reset .btn { flex-shrink: 0; }
 .timeline { display: flex; gap: 3px; flex-wrap: wrap; }
 .timeline span { width: 14px; height: 22px; border-radius: 4px; }
 .week-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 8px; }

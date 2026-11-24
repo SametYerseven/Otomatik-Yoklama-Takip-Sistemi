@@ -40,7 +40,8 @@ derste ne kadar kaldığının takip edilmesi. Bileşenler: ESP32 (sınıfta), F
 | 2 | Öğrenci kaydı, gizli anahtar | **Tamamlandı** (2026-11-18), Galaxy S24 Ultra'da test edildi: kayıt, giriş, çıkış, tekrar giriş, aynı numarayla ikinci kayıt engelleniyor ve uyarı gösteriliyor. `firebase/database.rules.json` Firebase'de yayında |
 | 3 | Dönen sınıf kodu (ESP32), öğrenci kodu (telefon), Cloud Functions doğrulaması, `Presence`'a yazma | Yapılmadı |
 | — | iOS (Swift + CoreLocation) | Yapılmadı, Mac gerekiyor |
-| — | Öğretmen paneline Firebase Auth | **Tamamlandı** (2026-11-18): e-posta/şifre girişi, `TeacherAccounts` eşlemesi, sıkı kurallar Firebase'de yayında. Şimdilik tek test hesabı (Samet, `osman_altay`'a bağlı); gerçek öğretmen hesapları açılınca silinmeli |
+| — | Öğretmen paneline Firebase Auth | **Tamamlandı** (2026-11-18): e-posta/şifre girişi, `TeacherAccounts` eşlemesi, sıkı kurallar Firebase'de yayında. Şimdilik iki test hesabı, ikisi de `osman_altay`'a bağlı: Samet'in hesabı ve Talha'nın 2026-11-24'te açtığı test öğretmen hesabı. Gerçek öğretmen hesapları açılınca ikisi de silinmeli (Authentication → Users ve `TeacherAccounts/{uid}`) |
+| — | Öğretmen paneline "Cihazı sıfırla" | **Tamamlandı** (2026-11-24): öğrenci detay penceresinde; kurallar Firebase'de yayında. Gerçek hesapla giriş çalışıyor; butonun gerçek öğrenci üzerinde denenmesi bekleniyor |
 
 Şu an telefon beacon'u duyup sadece kendi ekranında/bildiriminde gösteriyor; yoklama için
 Firebase'e bir şey göndermiyor (sadece kayıt/giriş verisi yazıyor). ESP32 de Firebase/Wi-Fi
@@ -66,12 +67,11 @@ Gerçekçi riskler ve önlemleri:
 
 ## Bekleyen işler
 
-- Ekip arkadaşı yeni kodu kullanmaya başlayınca canlı veritabanındaki Türkçe düğümleri
-  (`Ogretmenler, Siniflar, Ogrenciler, Varlik, Sistem, ML_Tahmin, RFID_Kartlar`) silmek ve
-  kurallardan çıkarmak.
-- `MLKomut` / `MLSonuclar` düğümlerini yazan kodu bulmak (repoda yok), repoya ekleyip
-  İngilizceye çevirmek.
-- Telefon değiştiren öğrenci için öğretmen paneline "cihaz sıfırla" butonu (şu an elle).
+- Türkçe düğümler (`Ogretmenler, Siniflar, Ogrenciler, Varlik, Sistem, ML_Tahmin, RFID_Kartlar`)
+  2026-11-24'te kurallardan çıkarıldı (kuralı olmayan düğüm kapalıdır). Canlı veritabanından
+  Console'dan silinecek (önce JSON yedeği alınmalı).
+- `MLKomut` / `MLSonuclar`: onları yazan ML kodu kayıp; ML için veri yeniden toplanacak.
+  2026-11-24'te kurallarda kapatıldı (veri silinmedi); ML'e dönülünce yeni koda göre kural yazılmalı.
 
 ## Klasör yapısı
 
@@ -224,7 +224,8 @@ aşağıdaki İngilizce düğümlere kopyalandı (`isim→name, sifre→password
 durum→status, SINIFTA→IN_CLASS, AKTIF→ACTIVE, ders→course, rfid_izin→rfid_permission,
 sinif_ici→in_class, zaman→time`). Türkçe düğümler henüz SİLİNMEDİ; yedek
 `firebase/backups/` altında (git'te yok). `MLKomut` ve `MLSonuclar`'ı repodaki hiçbir kod
-kullanmıyor (ekip arkadaşının yerel kodu olabilir); taşınmadı. Kurallarda iki ad seti de açık.
+kullanmıyor (ekip arkadaşının yerel kodu olabilir); taşınmadı. Türkçe düğümler 2026-11-24'te
+kurallardan çıkarıldı.
 
 - `TeacherAccounts/{uid}`: `"username"` — öğretmenin Firebase Auth hesabını `Teachers/{username}`
   profiline bağlar. Sadece Console'dan elle eklenir (kurallarda yazma kapalı). Kurallar
@@ -247,8 +248,11 @@ Aşama 2 ile eklenen (mobil uygulama yazar; `{uid}` = Firebase Auth uid):
 - `StudentSecrets/{uid}`: `{ key (base64, 32 byte), createdAt }` — **kimse okuyamaz** (sadece Admin
   SDK / Cloud Functions), bir kez yazılır. Yazmak için profilde numara olmalı ve
   `StudentNumbers/{o numara}` bu uid'i göstermeli (yarım kalmış hesaplar anahtar yazamaz).
-  Telefon değiştiren öğrenci için bu düğüm ve `StudentAccounts/{uid}/keyCreatedAt` elle
-  (Console'dan) silinmeli. Bir öğrenciyi silerken üst düğümü değil, altındaki uid'i sil.
+  Telefon değiştiren öğrenci için öğretmen panelinde öğrenci detayı → **"Cihazı sıfırla"**:
+  `StudentNumbers/{no}` → uid bulunur, bu düğüm ve `StudentAccounts/{uid}/keyCreatedAt` silinir;
+  öğrenci yeni telefondan girince uygulama yeni anahtar üretir, eski telefonun anahtarı geçersiz
+  kalır. Kurallar öğretmene bu iki yerde **sadece silme** izni verir (okuma/yazma yok). Bir
+  öğrenciyi silerken üst düğümü değil, altındaki uid'i sil.
 - Cloud Functions (Aşama 3) öğrenciyi uid → `StudentAccounts.studentNo` → `StudentNumbers`
   zinciriyle doğrulamalı; `StudentSecrets`'ın varlığı tek başına yeterli değil.
 - Cihaz eşleştirme: bir telefon tek öğrenciye bağlı (Kotlin `bound_uid`), bir hesap tek telefona
@@ -273,8 +277,8 @@ Aşama 2 ile eklenen (mobil uygulama yazar; `{uid}` = Firebase Auth uid):
   ev Wi-Fi'nin adı ve şifresi değiştirildi.
 - Web paneli Firebase Auth ile giriş yapıyor (2026-11-18). Kurallarda panel düğümlerini sadece
   `TeacherAccounts`'ta kaydı olan kullanıcılar okuyabilir; `Teachers`, `Classrooms`,
-  `MLPrediction`, `RFIDCards` istemciden yazılamaz (Console / Admin SDK). Eski Türkçe düğümler
-  tamamen kapalı. `MLKomut` / `MLSonuclar` hâlâ herkese açık (onları yazan kodu bilmiyoruz).
+  `MLPrediction`, `RFIDCards` istemciden yazılamaz (Console / Admin SDK). Eski Türkçe düğümlerin
+  kuralı yok, yani tamamen kapalı. `MLKomut` / `MLSonuclar` da 2026-11-24'ten beri kapalı (onları yazan kod kayıp).
   Eski `legacy_gatt` ESP32 kodu anonim girişle (`Firebase.signUp(..., "", "")`, her açılışta yeni
   hesap) `Presence`/`System`'e yazıyordu; yeni kurallarla yazamaz. Anonymous giriş 2026-11-18'de
   Firebase'de kapatıldı, birikmiş 990 anonim hesap silindi. Tekrar açılmamalı. Aşama 3'te yazma Cloud Functions (Admin SDK) ile olacak.

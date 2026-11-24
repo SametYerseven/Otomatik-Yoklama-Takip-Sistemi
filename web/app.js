@@ -122,6 +122,20 @@ function createFirebaseStore() {
         onStudents: (cb) => on('Students', (v) => cb(v || {})),
         addStudent: (no, name) => db.ref(`Students/${no}`).set(name),
         deleteStudent: (no) => db.ref(`Students/${no}`).remove(),
+        // Telefon degistiren ogrenci: sunucudaki anahtar kopyasi ve "anahtar olusturuldu"
+        // isareti silinir. Ogrenci yeni telefondan girince uygulama yeni anahtar uretir.
+        // Eski telefondaki anahtar sunucuda karsiligi kalmadigi icin artik ise yaramaz.
+        // Kurallar ogretmene bu iki yerde SADECE silme izni verir (okuyamaz, yazamaz).
+        async resetDevice(no) {
+            const owner = await db.ref(`StudentNumbers/${no}`).once('value');
+            if (!owner.exists()) return 'no-account';   // mobil uygulamada bu numarayla hesap yok
+            const uid = owner.val();
+            await db.ref().update({
+                [`StudentSecrets/${uid}`]: null,
+                [`StudentAccounts/${uid}/keyCreatedAt`]: null,
+            });
+            return 'reset';
+        },
         async startSession(room, course) {
             await db.ref(`Presence/${room}`).remove();
             await db.ref(`System/${room}`).set({ status: 'ACTIVE', course });
@@ -160,6 +174,7 @@ function createDemoStore() {
         onStudents(cb) { studentCb = cb; emitStudents(); },
         async addStudent(no, name) { students[no] = name; emitStudents(); },
         async deleteStudent(no) { delete students[no]; emitStudents(); },
+        async resetDevice() { return 'reset'; },   // demo: hicbir sey silinmez
         async startSession() {
             presence = {}; ml = {};
             for (const [no, s] of Object.entries(DemoData.live)) {
@@ -677,9 +692,37 @@ function openStudentDetail(no) {
         html += emptyState('fa-clock-rotate-left', 'Geçmiş haftaların yoklama kayıtları tutulmaya başladığında burada görünecek.');
     }
 
+    html += `<div class="device-reset"><div class="grow"><h3 style="margin-bottom:4px">Telefon bağlantısı</h3>
+        <div class="muted small">Öğrenci telefon değiştirdiyse ya da uygulamayı silip yeniden kurduysa bağlantıyı sıfırlayın.
+        Öğrenci bir sonraki girişinde yeni telefonuna bağlanır; eski telefon yoklama için kullanılamaz.</div></div>
+        <button class="btn btn-danger" id="btn-reset-device"><i class="fa-solid fa-mobile-screen"></i> Cihazı sıfırla</button></div>`;
+
     $('student-detail-body').innerHTML = html;
     $('modal-student-detail').classList.remove('hidden');
     $('btn-close-detail').addEventListener('click', () => $('modal-student-detail').classList.add('hidden'));
+    $('btn-reset-device').addEventListener('click', () => resetStudentDevice(no, name));
+}
+
+async function resetStudentDevice(no, name) {
+    if (!confirm(`${name} (${no}) adlı öğrencinin telefon bağlantısı silinecek.\n\n`
+        + 'Öğrenci bir sonraki girişinde yeni telefonuna bağlanacak; eski telefonu yoklama için kullanılamayacak.\n\n'
+        + 'Bu isteğin gerçekten öğrenciden geldiğinden emin olun. Devam edilsin mi?')) return;
+    const btn = $('btn-reset-device');
+    btn.disabled = true;
+    try {
+        const result = await Store.resetDevice(no);
+        if (result === 'no-account') {
+            toast(`${no} numarasıyla mobil uygulamada açılmış bir hesap yok.`, 'warning');
+        } else {
+            toast(`${name} için cihaz sıfırlandı. Öğrenci yeni telefonundan giriş yapabilir.`, 'success');
+        }
+    } catch (e) {
+        toast(e && e.code === 'PERMISSION_DENIED'
+            ? 'Veritabanı kuralları bu işleme izin vermedi. Güncel kurallar Firebase\'e yüklendi mi?'
+            : 'Firebase bağlantı hatası.', 'danger');
+    } finally {
+        btn.disabled = false;
+    }
 }
 $('modal-student-detail').addEventListener('click', (e) => { if (e.target.id === 'modal-student-detail') e.target.classList.add('hidden'); });
 

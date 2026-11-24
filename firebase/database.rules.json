@@ -15,15 +15,8 @@
     "MLPrediction": { ".read": "auth != null && root.child('TeacherAccounts').child(auth.uid).exists()", ".write": false },
     "RFIDCards":    { ".read": "auth != null && root.child('TeacherAccounts').child(auth.uid).exists()", ".write": false },
 
-    "Ogretmenler":  { ".read": false, ".write": false },
-    "Siniflar":     { ".read": false, ".write": false },
-    "Ogrenciler":   { ".read": false, ".write": false },
-    "Varlik":       { ".read": false, ".write": false },
-    "Sistem":       { ".read": false, ".write": false },
-    "ML_Tahmin":    { ".read": false, ".write": false },
-    "RFID_Kartlar": { ".read": false, ".write": false },
-    "MLKomut":      { ".read": true, ".write": true },
-    "MLSonuclar":   { ".read": true, ".write": true },
+    "MLKomut":      { ".read": false, ".write": false },
+    "MLSonuclar":   { ".read": false, ".write": false },
 
     "StudentAccounts": {
       "$uid": {
@@ -37,6 +30,7 @@
         "email": { ".validate": "newData.isString() && newData.val().length <= 200" },
         "createdAt": { ".validate": "newData.isNumber()" },
         "keyCreatedAt": {
+          ".write": "auth != null && root.child('TeacherAccounts').child(auth.uid).exists() && !newData.exists()",
           ".validate": "newData.isNumber() && !data.exists() && root.child('StudentSecrets').child($uid).exists()"
         },
         "$other": { ".validate": false }
@@ -54,7 +48,7 @@
     "StudentSecrets": {
       "$uid": {
         ".read": false,
-        ".write": "auth != null && auth.uid === $uid && !data.exists() && root.child('StudentAccounts').child($uid).child('studentNo').exists() && root.child('StudentNumbers').child(root.child('StudentAccounts').child($uid).child('studentNo').val()).val() === $uid",
+        ".write": "(auth != null && auth.uid === $uid && !data.exists() && root.child('StudentAccounts').child($uid).child('studentNo').exists() && root.child('StudentNumbers').child(root.child('StudentAccounts').child($uid).child('studentNo').val()).val() === $uid) || (auth != null && root.child('TeacherAccounts').child(auth.uid).exists() && !newData.exists())",
         ".validate": "newData.hasChildren(['key', 'createdAt'])",
         "key": { ".validate": "newData.isString() && newData.val().length === 44" },
         "createdAt": { ".validate": "newData.isNumber()" },
