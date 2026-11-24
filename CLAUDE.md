@@ -26,6 +26,10 @@ derste ne kadar kaldığının takip edilmesi. Bileşenler: ESP32 (sınıfta), F
    - ESP32 `minor` alanında 30 sn'de bir değişen sınıf kodu yayınlar.
    - Telefon kendi gizli anahtarıyla öğrenci kodu üretip sunucuya gönderir.
    - Doğrulamayı **Firebase Cloud Functions** yapar (proje Blaze planında olmalı).
+   - Ayrıntılı kurallar, bayt düzeni ve test vektörleri: **`docs/protocol.md`** (2026-11-24,
+     taslak, **karar bekliyor**; onaylanmadan Aşama 3 kodu yazılmaz). Onaylanınca ESP32, Kotlin
+     ve fonksiyon kodu bu belgeye birebir uymalı; birinde değişiklik olursa belge ve test
+     vektörleri de güncellenmeli.
 4. **Öğrenci kaydı:** Firebase Authentication, e-posta/şifre.
 5. **Android'de arka plan taraması native Kotlin + AltBeacon ile yapılır**, Flutter sadece ekran.
    Uygulama kapalıyken Flutter motoru çalışmadığı için arka plan işleri (tarama, bildirim,
@@ -38,7 +42,7 @@ derste ne kadar kaldığının takip edilmesi. Bileşenler: ESP32 (sınıfta), F
 |---|---|---|
 | 1 | ESP32 sabit iBeacon + Android arka plan algılama testi | **Tamamlandı**, Galaxy S24 Ultra'da test edildi: uygulama kapalıyken "Sınıfa girdin/çıktın" bildirimleri geliyor |
 | 2 | Öğrenci kaydı, gizli anahtar | **Tamamlandı** (2026-11-18), Galaxy S24 Ultra'da test edildi: kayıt, giriş, çıkış, tekrar giriş, aynı numarayla ikinci kayıt engelleniyor ve uyarı gösteriliyor. `firebase/database.rules.json` Firebase'de yayında |
-| 3 | Dönen sınıf kodu (ESP32), öğrenci kodu (telefon), Cloud Functions doğrulaması, `Presence`'a yazma | Yapılmadı |
+| 3 | Dönen sınıf kodu (ESP32), öğrenci kodu (telefon), Cloud Functions doğrulaması, `Presence`'a yazma | **Protokol taslağı yazıldı, karar bekliyor** (2026-11-24, `docs/protocol.md`); kod yazılmadı. Sıra: Kotlin → fonksiyon (Emulator) → ESP32 (DS3231 bekleniyor) → panel `lastSeen` |
 | — | iOS (Swift + CoreLocation) | Yapılmadı, Mac gerekiyor |
 | — | Öğretmen paneline Firebase Auth | **Tamamlandı** (2026-11-18): e-posta/şifre girişi, `TeacherAccounts` eşlemesi, sıkı kurallar Firebase'de yayında. Şimdilik iki test hesabı, ikisi de `osman_altay`'a bağlı: Samet'in hesabı ve Talha'nın 2026-11-24'te açtığı test öğretmen hesabı. Gerçek öğretmen hesapları açılınca ikisi de silinmeli (Authentication → Users ve `TeacherAccounts/{uid}`) |
 | — | Öğretmen paneline "Cihazı sıfırla" | **Tamamlandı** (2026-11-24): panelde her zaman açık "Öğrenciler" sekmesi → öğrenci detayı → buton; kurallar Firebase'de yayında. Aynı telefonda sıfırlanırsa uygulama bir sonraki açılışta anahtarı yeniler. Galaxy S24 Ultra'da test edildi: normal açılış, aynı telefonda sıfırlama, uygulamayı silip kurma (sıfırlamasız engelleniyor, sıfırlamayla açılıyor), panel sekmesi |
@@ -113,7 +117,8 @@ ml/ml_pipeline/              Visual Studio çözümü (ml_pipeline.slnx)
                              anomaly_detection, start_system.bat, model.pkl, rssi_dataset.csv,
                              firebase_credentials.json (git'te yok; scriptler anahtarı kendi
                              klasöründe arar)
-docs/                        Proje öneri formu, grafikler
+docs/                        Proje öneri formu, grafikler; protocol.md (Aşama 3 protokolü).
+                             Rapor dosyaları (report_*.docx, figures/, xlsx) commit edilmiyor
 ```
 
 Arduino IDE her `.ino` dosyasının kendi adını taşıyan klasörde olmasını ister; yeni bir sketch
@@ -125,11 +130,14 @@ eklerken `esp32/<ad>/<ad>.ino` düzenini koru.
 |---|---|
 | iBeacon UUID | `6f1d3b2a-8c4e-4a7f-9b21-5d3e8a9c0f47` |
 | iBeacon major | Sınıf numarası (örn. 203). 0–65535 arası **sayı** olmalı |
-| iBeacon minor | Aşama 1'de sabit `1`; Aşama 3'te dönen sınıf kodu olacak |
+| iBeacon minor | Aşama 1'de sabit `1`; Aşama 3'te dönen sınıf kodu C olacak |
+| Aşama 3 zaman dilimi (taslak) | 30 sn, `T = floor(unix/30)`; sunucu toleransı ±1 dilim |
+| Aşama 3 gönderim aralığı (taslak) | Telefon en az 60 sn'de bir `checkIn` çağırır; panel 150 sn'den eski `lastSeen`'i "sınıfta değil" sayar |
+| Aşama 3 anahtarları (taslak) | Sınıf anahtarı dersliğe ayrı, `RoomSecrets/{room}` + ESP32 `config.h`; öğrenci anahtarı `StudentSecrets/{uid}` |
 | ESP32 yayın aralığı | 100 ms (`0xA0`) |
 | Firebase proje ID | `otomatik-yoklama-takip-sistemi` |
 | RTDB URL | `https://otomatik-yoklama-takip-sistemi-default-rtdb.europe-west1.firebasedatabase.app/` |
-| Cloud Functions bölgesi | `europe-west1` (planlanan) |
+| Cloud Functions bölgesi | `europe-west1` (planlanan); fonksiyon: callable `checkIn` (taslak) |
 | Android paket adı | `com.example.attendance_system` (Dart paket adı `attendance_system`) |
 | Flutter kanalları | `attendance/beacon` (MethodChannel), `attendance/beacon_events` (EventChannel), `attendance/student_key` (MethodChannel: status, createKey, deleteKey) |
 
