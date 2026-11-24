@@ -13,6 +13,22 @@ import io.flutter.plugin.common.MethodChannel
  */
 class MainActivity : FlutterActivity() {
 
+    // Bu ekranin olay baglantisi. Ekran kapaninca (uygulama kaydirilip kapatilinca)
+    // Dart "dinlemeyi biraktim" diyemeden yok olur; temizligi burada yapariz ki
+    // BeaconApp olaylari olmus ekrana gondermeye calismasin. Tarama etkilenmez.
+    private var mySink: EventChannel.EventSink? = null
+
+    private fun releaseSink() {
+        // Yeni ekran coktan baglandiysa onun baglantisini silme
+        if (BeaconApp.eventSink === mySink) BeaconApp.eventSink = null
+        mySink = null
+    }
+
+    override fun cleanUpFlutterEngine(flutterEngine: FlutterEngine) {
+        releaseSink()
+        super.cleanUpFlutterEngine(flutterEngine)
+    }
+
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
         val messenger = flutterEngine.dartExecutor.binaryMessenger
@@ -64,11 +80,12 @@ class MainActivity : FlutterActivity() {
         EventChannel(messenger, "attendance/beacon_events").setStreamHandler(
             object : EventChannel.StreamHandler {
                 override fun onListen(arguments: Any?, events: EventChannel.EventSink?) {
+                    mySink = events
                     BeaconApp.eventSink = events
                 }
 
                 override fun onCancel(arguments: Any?) {
-                    BeaconApp.eventSink = null
+                    releaseSink()
                 }
             }
         )
