@@ -42,18 +42,18 @@ derste ne kadar kaldığının takip edilmesi. Bileşenler: ESP32 (sınıfta), F
 |---|---|---|
 | 1 | ESP32 sabit iBeacon + Android arka plan algılama testi | **Tamamlandı**, Galaxy S24 Ultra'da test edildi: uygulama kapalıyken "Sınıfa girdin/çıktın" bildirimleri geliyor |
 | 2 | Öğrenci kaydı, gizli anahtar | **Tamamlandı** (2026-11-18), Galaxy S24 Ultra'da test edildi: kayıt, giriş, çıkış, tekrar giriş, aynı numarayla ikinci kayıt engelleniyor ve uyarı gösteriliyor. `firebase/database.rules.json` Firebase'de yayında |
-| 3 | Dönen sınıf kodu (ESP32), öğrenci kodu (telefon), Cloud Functions doğrulaması, `Presence`'a yazma | **Kodlanıyor** (protokol `docs/protocol.md`, 2026-11-26'da kabul edildi). Adım adım yapılıyor: ✅ Kotlin öğrenci kodu (`AttendanceCode.kt`) ✅ Kotlin `checkIn` istemcisi (`CheckInClient.kt`, henüz taramaya bağlı değil) ✅ sunucu kod hesabı (`functions/codes.js`) — hepsi test vektörleriyle birim testli. Sıradaki: `functions/index.js` (`checkIn`, 8 kontrol + `Presence` yazımı, Emulator'da) → `BeaconApp`'e bağlama (60 sn, en güçlü beacon, `no-key` → anahtar yenileme) → ESP32 dönen C (DS3231 bekleniyor) → panel `lastSeen` → Blaze + deploy |
+| 3 | Dönen sınıf kodu (ESP32), öğrenci kodu (telefon), Cloud Functions doğrulaması, `Presence`'a yazma | **Kodlanıyor** (protokol `docs/protocol.md`, 2026-11-26'da kabul edildi). Adım adım yapılıyor: ✅ Kotlin öğrenci kodu (`AttendanceCode.kt`) ✅ Kotlin `checkIn` istemcisi (`CheckInClient.kt`, henüz taramaya bağlı değil) ✅ sunucu kod hesabı (`functions/codes.js`) — hepsi test vektörleriyle birim testli. ✅ DS3231 saat modülü (Samet, 2026-11-26, `esp32/rtc_test`): ayarlama, reset ve 6–7 dk elektrik kesintisi sonrası saat korunuyor. ✅ ESP32 dönen C (`beacon.ino`, Samet, 2026-11-26): açılışta test vektörleriyle öz-test yapar; kartta test edildi (öz-test TAMAM, art arda 3 dilimde C `codes.js` ile aynı). Sıradaki: `functions/index.js` (`checkIn`, 8 kontrol + `Presence` yazımı, Emulator'da) → `BeaconApp`'e bağlama (60 sn, en güçlü beacon, `no-key` → anahtar yenileme) → panel `lastSeen` → Blaze + deploy (gerçek sınıf anahtarı: `new_room_key.ps1` → `config.h` + `RoomSecrets`) |
 | — | iOS (Swift + CoreLocation) | Yapılmadı, Mac gerekiyor |
 | — | Öğretmen paneline Firebase Auth | **Tamamlandı** (2026-11-18): e-posta/şifre girişi, `TeacherAccounts` eşlemesi, sıkı kurallar Firebase'de yayında. Şimdilik iki test hesabı, ikisi de `osman_altay`'a bağlı: Samet'in hesabı ve Talha'nın 2026-11-24'te açtığı test öğretmen hesabı. Gerçek öğretmen hesapları açılınca ikisi de silinmeli (Authentication → Users ve `TeacherAccounts/{uid}`) |
 | — | Öğretmen paneline "Cihazı sıfırla" | **Tamamlandı** (2026-11-24): panelde her zaman açık "Öğrenciler" sekmesi → öğrenci detayı → buton; kurallar Firebase'de yayında. Aynı telefonda sıfırlanırsa uygulama bir sonraki açılışta anahtarı yeniler. Galaxy S24 Ultra'da test edildi: normal açılış, aynı telefonda sıfırlama, uygulamayı silip kurma (sıfırlamasız engelleniyor, sıfırlamayla açılıyor), panel sekmesi |
 
 Şu an telefon beacon'u duyup sadece kendi ekranında/bildiriminde gösteriyor; yoklama için
 Firebase'e bir şey göndermiyor (sadece kayıt/giriş verisi yazıyor). ESP32 de Firebase/Wi-Fi
-kullanmıyor.
+kullanmıyor; saati DS3231'den alıyor.
 
 Aşama 3 için bekleyen kararlar: proje Blaze planına geçmeli (ödeme bilgisi; proje ekip
-arkadaşının hesabında). ESP32'nin saati nereden alacağı seçilmeli: Wi-Fi + NTP ya da DS3231 RTC
-modülü. Röle saldırısı (sınıftaki birinin kodu 30 sn içinde dışarıya iletmesi) bilinen sınır.
+arkadaşının hesabında). ESP32 saat kaynağı: **DS3231 RTC** (karar verildi, 2026-11-26'da
+test edildi). Röle saldırısı (sınıftaki birinin kodu 30 sn içinde dışarıya iletmesi) bilinen sınır.
 
 **Cloud Functions maliyet kuralları (Blaze, kullandıkça öde; Aşama 3'te uyulmalı):**
 Ücretsiz aylık kota (2 milyon fonksiyon çağrısı, RTDB 1 GB depolama / 10 GB indirme) bu
@@ -83,7 +83,8 @@ Model yeniden eğitilecek, çünkü yeni mimaride RSSI'yi ESP32 değil **telefon
 Aşama 3 `checkIn` işinden bağımsız; hangisi önce yapılacağına kullanıcı karar verir.
 
 - **ESP32'de değişiklik yok:** mevcut `beacon.ino` sınıfa konur, yeri not edilir/fotoğraflanır
-  (eğitim ve gerçek kullanım aynı yerde olmalı). Telefonlar ESP32'ye bağlanmaz, sadece yayını
+  (eğitim ve gerçek kullanım aynı yerde olmalı). `beacon.ino` artık dönen kodlu (Aşama 3); DS3231
+  bağlı ve saat ayarlı olmalı, yoksa yayın yapmaz. Minor'ın değişmesi RSSI ölçümünü etkilemez. Telefonlar ESP32'ye bağlanmaz, sadece yayını
   dinler; aynı anda istenen sayıda telefon ölçüm yapabilir.
 - **Telefonlar:** Hem Android hem iPhone, mümkün olduğunca çok ve farklı model (her telefonun
   anteni farklı ölçer; tek modelle eğitilen model başka telefonda yanılır). Tüm telefonlar aynı
@@ -125,7 +126,12 @@ Aşama 3 `checkIn` işinden bağımsız; hangisi önce yapılacağına kullanıc
 ## Klasör yapısı
 
 ```
-esp32/beacon/beacon.ino      Aşama 1 iBeacon yayını
+esp32/beacon/                Aşama 3 iBeacon yayını, minor = dönen sınıf kodu C
+  beacon.ino                 yayın + C hesabı (mbedtls HMAC) + açılışta test vektörü öz-testi
+  ds3231.h                   DS3231 okuma/yazma (Wire, kütüphanesiz), Unix zamanı UTC
+  config_example.h           → config.h kopyalanır (git'te yok): CLASSROOM_MAJOR + ROOM_KEY
+  new_room_key.ps1           rastgele sınıf anahtarı: config.h dizisi + RoomSecrets base64'ü
+esp32/rtc_test/              DS3231 testi (rtc_test.ino) + set_time.ps1 (PC saatini DS3231'e yazar)
 esp32/rfid_test/             RC522 RFID test kodu
 esp32/legacy_gatt/           ESKİ GATT tabanlı sistem (legacy_gatt.ino + config_example.h);
                              referans, yeni geliştirmede kullanılmıyor
@@ -181,7 +187,7 @@ eklerken `esp32/<ad>/<ad>.ino` düzenini koru.
 |---|---|
 | iBeacon UUID | `6f1d3b2a-8c4e-4a7f-9b21-5d3e8a9c0f47` |
 | iBeacon major | Sınıf numarası (örn. 203). 0–65535 arası **sayı** olmalı |
-| iBeacon minor | Aşama 1'de sabit `1`; Aşama 3'te dönen sınıf kodu C olacak |
+| iBeacon minor | Dönen sınıf kodu C (`beacon.ino`, 2026-11-26); Aşama 1'de sabit `1` idi |
 | Aşama 3 zaman dilimi (taslak) | 30 sn, `T = floor(unix/30)`; sunucu toleransı ±1 dilim |
 | Aşama 3 gönderim aralığı (taslak) | Telefon en az 60 sn'de bir `checkIn` çağırır; panel 150 sn'den eski `lastSeen`'i "sınıfta değil" sayar |
 | Aşama 3 anahtarları (taslak) | Sınıf anahtarı dersliğe ayrı, `RoomSecrets/{room}` + ESP32 `config.h`; öğrenci anahtarı `StudentSecrets/{uid}` |
@@ -198,7 +204,20 @@ eklerken `esp32/<ad>/<ad>.ino` düzenini koru.
   çünkü bazı ESP32 kütüphane sürümleri UUID'yi ters byte sırasıyla yazıyor. Bu yaklaşımı koru.
 - Paket: Flags (3 byte) + iBeacon manufacturer data (27 byte: `1A FF 4C 00 02 15` + UUID 16 +
   major 2 + minor 2 + txPower 1) = 30 byte. Major/minor big-endian.
-- Kart: ESP32 Dev Module, USB çipi CP2102 (Windows'ta COM9). Arduino IDE, "esp32 by Espressif".
+- Kart: ESP32 Dev Module, USB çipi CP2102 (Talha'nın bilgisayarında COM9, Samet'inkinde COM4).
+  Arduino IDE, "esp32 by Espressif" 3.3.8.
+- **DS3231:** VCC→3V3 (5V değil), GND→GND, SDA→D21, SCL→D22, düğme pil takılı. Saat **UTC**
+  tutulur. Ayarlamak: Serial Monitor kapalıyken
+  `powershell -ExecutionPolicy Bypass -File esp32\rtc_test\set_time.ps1 -Port COM4`
+  (`rtc_test.ino` ve `beacon.ino` ikisi de Serial'den `T<unix>` komutunu kabul eder).
+- `beacon.ino` her 200 ms saati okur, dilim değişince C'yi yeniden hesaplayıp yayın verisini
+  yayın durmadan günceller. Saat okunamazsa / ayarlı değilse (OSF bayrağı ya da 2026 öncesi) ya da
+  açılıştaki test vektörü öz-testi başarısızsa **yayın yapmaz** (yanlış kod telefonları boşuna
+  sunucuya gönderir). Serial'de her dilimde `T` ve `C` yazar; aynı anı sunucu koduyla karşılaştırmak için:
+  `node -e "const c=require('./functions/codes.js');const k=Buffer.from([...Array(32).keys()]);const t=c.slotOf(Date.now()/1000);console.log('T='+t,'C='+c.classCode(k,203,t))"`
+  (test anahtarı ve derslik 203 için).
+- `config.h`'ta protokolün test anahtarı varsa açılışta uyarı yazar; gerçek derslikte
+  `new_room_key.ps1` ile yeni anahtar üretilir, aynı anahtar `RoomSecrets/{derslik}/key`'e konur.
 
 ## Android notları
 
@@ -284,8 +303,9 @@ node --test functions/test/codes.test.js                     # proje kökünde, 
 ```
 `node --test` klasör adıyla değil dosya adıyla verilmeli (Node 22 klasörü dosya sanıyor).
 
-ESP32: Arduino IDE → `esp32/beacon/beacon.ino` → Board: ESP32 Dev Module → Port: COM9 → Upload →
-Serial Monitor 115200. Doğrulama: Android'de nRF Connect uygulamasında "iBeacon" görünmeli
+ESP32: `esp32/beacon/config_example.h` → `config.h` kopyala → Arduino IDE →
+`esp32/beacon/beacon.ino` → Board: ESP32 Dev Module → Port: COM9/COM4 → Upload →
+Serial Monitor 115200 (DS3231 bağlı ve saat ayarlı olmalı). Doğrulama: Android'de nRF Connect uygulamasında "iBeacon" görünmeli
 (iPhone'da nRF Connect iBeacon'ları göstermez).
 
 ## Mevcut veritabanı düğümleri (web paneli bunları kullanıyor, formatı bozma)

@@ -51,7 +51,8 @@ C     = h[0] * 256 + h[1]                               // 0..65535
   bile kodları farklı çıkar.
 - ESP32 her dilim başında C'yi yeniden hesaplar ve yayın paketini günceller
   (`esp_ble_gap_config_adv_data_raw`, `beacon.ino`'daki elle kurulan paket korunur).
-- Saat kaynağı: DS3231 RTC (sipariş edildi).
+- Saat kaynağı: DS3231 RTC, UTC tutar (2026-11-26'da test edildi; `esp32/beacon/ds3231.h`).
+  Saat okunamazsa ya da ayarlı değilse ESP32 yayın yapmaz.
 - Telefon tarafında bölge yalnızca UUID ile tanımlı (major/minor `null`) olduğu için minor'ın
   değişmesi "sınıftan çıktın" olayı üretmez.
 
