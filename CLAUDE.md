@@ -69,6 +69,37 @@ Gerçekçi riskler ve önlemleri:
    container paketi bırakır (0,5 GB ücretsiz). İlk deploy'da Firebase CLI "eski paketleri
    otomatik sil" (cleanup policy) sorar: **evet** denmeli.
 
+## Son değişiklikler: 2026-11-26 (Samet, Claude ile)
+
+Talha (ve Talha'nın Claude'u) için günün özeti. Ayrıntılar ilgili bölümlerde; burası "ne değişti,
+ne denendi, sende ne yapılmalı" listesi. Bir sonraki büyük değişiklikte bu bölüm yenisiyle
+değiştirilebilir.
+
+| Commit | Ne yapıldı | Nasıl denendi |
+|---|---|---|
+| `356edab` | **ESP32 dönen sınıf kodu + DS3231.** `beacon.ino` saati DS3231'den (UTC) okuyup her 30 sn'de C'yi HMAC ile hesaplıyor, minor'da yayınlıyor; açılışta test vektörü öz-testi; saat ayarsızsa yayın yapmıyor. `ds3231.h`, `config_example.h` (→ `config.h`, git'te yok), `new_room_key.ps1`, `esp32/rtc_test/` + `set_time.ps1` | Kartta: saat reset ve 35 dk elektrik kesintisinde korundu; art arda 3 dilimde C, `functions/codes.js` ile aynı |
+| `cfe189b` | **Panel `lastSeen` kuralı:** öğrenci `IN_CLASS` ve (elle eklendi ya da son sinyal ≤150 sn) ise "Sınıfta"; süre Firebase sunucu saatiyle. Tek fonksiyon `isInClass` | Demo modunda tarayıcıda |
+| `64a7b46`, `8bc0b0f`, `67d979d` | **Panel yayında:** https://otomatik-yoklama-takip-sistemi.web.app (demo: `/?demo=1`). `firebase.json`, `.firebaserc`. Sadece `web/` değişince `firebase deploy --only hosting` | Yayındaki adreste demo ve gerçek giriş ekranı |
+| `9fe2218` | **`checkIn` sunucu fonksiyonu** (`functions/index.js` + `checkin.js`), protokoldeki 8 kontrol + `Presence` yazımı. **Protokol değişikliği:** `class-code`/`student-code` → tek `bad-code`; günde 10 hatalı deneme sınırı (`CheckInFailures`); `unknown-room`. Senin `CheckInClient` değişmeden uyumlu. Kurallara `RoomSecrets`, `CheckInFailures` (kapalı) eklendi, **canlıya yayınlanmadı**. `firebase.json`'a functions/database/emulator. **`train.py` yeniden yazıldı** (yeni CSV, gün/telefon bazında test, `model_phone.pkl`) | 19 birim testi + Emulator'da uçtan uca 10/10; train.py sahte veriyle |
+| `8e01a3f` | **Panel `?emulator=1`** (sadece localhost) + `functions/test/emulator_demo.js` (3 sahte telefon) | Emulator'da: ders başlayınca 3 öğrenci "Sınıfta", susan telefon 2,5 dk sonra "Ayrıldı" |
+| `92580d6` | **ML veri toplama modu** (Android `RssiLogger.kt`, iOS `AppDelegate.swift`, `data_collection_screen.dart`, kanal `attendance/rssi_logger`) + 2026-11-27 ölçüm günü ve ödünç Mac adımları | **DERLENMEDİ, telefonda DENENMEDİ** (Samet'te Flutter yok). Sadece CSV biçimi `train.py` ile doğrulandı |
+
+**Talha, senden beklenenler (öncelik sırasıyla):**
+1. **Bu gece:** `git pull` → `cd mobile && flutter pub get && flutter run` (Android). Derleme
+   hatası varsa düzelt. Giriş ekranındaki **"Veri toplama modu (geliştirici)"** ile aç, evde ESP32
+   açıkken 5 dk içeride/dışarıda kayıt al, Paylaş ile CSV'yi Samet'e gönder. CSV'de `rssi`
+   değerleri satırdan satıra oynuyor mu bak (düz/yumuşaksa AltBeacon ortalama veriyor demektir).
+   Adımlar: "Bekleyen işler → İlk ölçüm günü".
+2. **Yarın (2026-11-27):** sınıfta ölçüm; ödünç Mac'le iPhone kurulumu (aynı bölümde).
+3. **Sonra:** `BeaconApp`'i `CheckInClient`'a bağlama (60 sn, en güçlü beacon, `no-key` →
+   anahtar yenileme). Sunucu hazır; Emulator'la denemek için Kotlin'de `useEmulator`.
+4. Panelin `?emulator=1`'i ve `emulator_demo.js` ile sunucu + panel zincirini kendi
+   bilgisayarında görebilirsin ("Çalıştırma" bölümü).
+
+**Ortak karar bekleyenler:** Blaze (fonksiyonu yayına almak için); ders bazında öğrenci listesi
+(şu an derse kayıtlı olmayan ama `Students`'ta olan biri de "var" görünebilir); güncel kuralların
+(`RoomSecrets`, `CheckInFailures`) canlıya yayınlanması; hoca için gerçek öğretmen hesabı.
+
 ## Bekleyen işler
 
 - `MLKomut` / `MLSonuclar`: onları yazan ML kodu kayıp; ML için veri yeniden toplanacak (aşağıdaki
