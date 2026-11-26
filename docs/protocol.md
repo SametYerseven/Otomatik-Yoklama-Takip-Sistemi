@@ -1,6 +1,6 @@
 # Aşama 3 Yoklama Protokolü
 
-Durum: **Taslak, karar bekliyor (2026-11-24).** Henüz kodu yazılmadı; ekip onayından sonra uygulanacak.
+Durum: **Kabul edildi, kodlanıyor (2026-11-26).** Taslak 2026-11-24'te yazıldı.
 Bu belge ESP32, telefon (Kotlin) ve Cloud Function'ın **aynı** uygulaması gereken kuralları
 tanımlar. Birinde değişiklik yapılırsa üçü birlikte güncellenmeli ve sondaki test vektörleri
 yeniden hesaplanmalıdır.
@@ -99,6 +99,10 @@ Kotlin (`BeaconApp`), uygulama kapalıyken de çalışır:
 | 6 | S, `StudentSecrets/{uid}.key` ile hesaplanır ve sabit zamanlı karşılaştırılır | `permission-denied` (`student-code`) |
 | 7 | `System/{room}.status` `ACTIVE` veya `EXIT` (ders sürüyor) | `{ result: "no-session" }`, yazma yok |
 | 8 | `Presence/{room}/{studentNo}.lastSlot >= Tm` ise (aynı/eski dilim) | `{ result: "duplicate" }`, yazma yok |
+
+Hata durumunda sunucu `HttpsError(kod, neden)` döner; parantez içindeki neden
+(`not-student`, `no-key`, `class-code`, `student-code`) hatanın **mesaj** alanına yazılır.
+Telefon `no-key`'i bu mesajdan tanır.
 
 **Yazma** (yalnızca 1–8 geçerse):
 

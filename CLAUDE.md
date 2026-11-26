@@ -22,14 +22,14 @@ derste ne kadar kaldığının takip edilmesi. Bileşenler: ESP32 (sınıfta), F
 2. **MAC adresi KULLANILMAZ.** Telefonlar BLE'de rastgele, değişen adres kullanıyor; uygulamalar
    gerçek MAC'i okuyamıyor. Kimlik, yayın/istek içeriğiyle (HMAC kodları) kanıtlanır.
 3. **Kimlik ve fiziksel varlık HMAC ile kanıtlanır** (öğrenci anahtarı Aşama 2'de hazır; kod
-   üretme ve doğrulama Aşama 3, henüz yapılmadı):
+   üretme ve doğrulama Aşama 3, yazılıyor):
    - ESP32 `minor` alanında 30 sn'de bir değişen sınıf kodu yayınlar.
    - Telefon kendi gizli anahtarıyla öğrenci kodu üretip sunucuya gönderir.
    - Doğrulamayı **Firebase Cloud Functions** yapar (proje Blaze planında olmalı).
-   - Ayrıntılı kurallar, bayt düzeni ve test vektörleri: **`docs/protocol.md`** (2026-11-24,
-     taslak, **karar bekliyor**; onaylanmadan Aşama 3 kodu yazılmaz). Onaylanınca ESP32, Kotlin
-     ve fonksiyon kodu bu belgeye birebir uymalı; birinde değişiklik olursa belge ve test
-     vektörleri de güncellenmeli.
+   - Ayrıntılı kurallar, bayt düzeni ve test vektörleri: **`docs/protocol.md`** (2026-11-24'te
+     yazıldı, 2026-11-26'da kabul edildi, kodlanıyor). ESP32, Kotlin ve fonksiyon kodu bu belgeye
+     birebir uymalı; birinde değişiklik olursa belge, test vektörleri ve üç taraftaki birim
+     testleri de güncellenmeli.
 4. **Öğrenci kaydı:** Firebase Authentication, e-posta/şifre.
 5. **Android'de arka plan taraması native Kotlin + AltBeacon ile yapılır**, Flutter sadece ekran.
    Uygulama kapalıyken Flutter motoru çalışmadığı için arka plan işleri (tarama, bildirim,
@@ -42,7 +42,7 @@ derste ne kadar kaldığının takip edilmesi. Bileşenler: ESP32 (sınıfta), F
 |---|---|---|
 | 1 | ESP32 sabit iBeacon + Android arka plan algılama testi | **Tamamlandı**, Galaxy S24 Ultra'da test edildi: uygulama kapalıyken "Sınıfa girdin/çıktın" bildirimleri geliyor |
 | 2 | Öğrenci kaydı, gizli anahtar | **Tamamlandı** (2026-11-18), Galaxy S24 Ultra'da test edildi: kayıt, giriş, çıkış, tekrar giriş, aynı numarayla ikinci kayıt engelleniyor ve uyarı gösteriliyor. `firebase/database.rules.json` Firebase'de yayında |
-| 3 | Dönen sınıf kodu (ESP32), öğrenci kodu (telefon), Cloud Functions doğrulaması, `Presence`'a yazma | **Protokol taslağı yazıldı, karar bekliyor** (2026-11-24, `docs/protocol.md`); kod yazılmadı. Sıra: Kotlin → fonksiyon (Emulator) → ESP32 (DS3231 bekleniyor) → panel `lastSeen` |
+| 3 | Dönen sınıf kodu (ESP32), öğrenci kodu (telefon), Cloud Functions doğrulaması, `Presence`'a yazma | **Kodlanıyor** (protokol `docs/protocol.md`, 2026-11-26'da kabul edildi). Adım adım yapılıyor: ✅ Kotlin öğrenci kodu (`AttendanceCode.kt`) ✅ Kotlin `checkIn` istemcisi (`CheckInClient.kt`, henüz taramaya bağlı değil) ✅ sunucu kod hesabı (`functions/codes.js`) — hepsi test vektörleriyle birim testli. Sıradaki: `functions/index.js` (`checkIn`, 8 kontrol + `Presence` yazımı, Emulator'da) → `BeaconApp`'e bağlama (60 sn, en güçlü beacon, `no-key` → anahtar yenileme) → ESP32 dönen C (DS3231 bekleniyor) → panel `lastSeen` → Blaze + deploy |
 | — | iOS (Swift + CoreLocation) | Yapılmadı, Mac gerekiyor |
 | — | Öğretmen paneline Firebase Auth | **Tamamlandı** (2026-11-18): e-posta/şifre girişi, `TeacherAccounts` eşlemesi, sıkı kurallar Firebase'de yayında. Şimdilik iki test hesabı, ikisi de `osman_altay`'a bağlı: Samet'in hesabı ve Talha'nın 2026-11-24'te açtığı test öğretmen hesabı. Gerçek öğretmen hesapları açılınca ikisi de silinmeli (Authentication → Users ve `TeacherAccounts/{uid}`) |
 | — | Öğretmen paneline "Cihazı sıfırla" | **Tamamlandı** (2026-11-24): panelde her zaman açık "Öğrenciler" sekmesi → öğrenci detayı → buton; kurallar Firebase'de yayında. Aynı telefonda sıfırlanırsa uygulama bir sonraki açılışta anahtarı yeniler. Galaxy S24 Ultra'da test edildi: normal açılış, aynı telefonda sıfırlama, uygulamayı silip kurma (sıfırlamasız engelleniyor, sıfırlamayla açılıyor), panel sekmesi |
@@ -103,6 +103,12 @@ mobile/                      Flutter projesi (paket adı com.example.attendance_
     BeaconApp.kt             Application sınıfı; AltBeacon ile arka plan tarama, bildirimler
     MainActivity.kt          Flutter <-> Kotlin köprüsü (MethodChannel/EventChannel)
     StudentKeyStore.kt       Gizli HMAC anahtarı: üretme, Android Keystore'a aktarma, sign()
+    AttendanceCode.kt        Aşama 3 öğrenci kodu S (msg_s bayt düzeni + sign())
+    CheckInClient.kt         Aşama 3 `checkIn` callable çağrısı ve yanıt yorumlama (Result)
+  android/app/src/test/kotlin/.../  JUnit birim testleri (bilgisayarda çalışır, Keystore yok)
+functions/                   Aşama 3 Cloud Functions (Node.js)
+  codes.js                   T, C, S hesabı ve doğrulaması (Firebase'siz, saf hesap)
+  test/codes.test.js         protocol.md test vektörleri (node:test, ek paket yok)
 web/                         Öğretmen paneli (HTML/JS, Firebase JS SDK v8, SheetJS ile Excel).
                              Açık tema + CBÜ laciverti. Görünümler: Genel Bakış, Derslerim,
                              Öğrenciler (liste, ekle/sil), Aktif Yoklama (öğrenci kartları), Uyarılar;
@@ -206,6 +212,11 @@ orada web paneli, ESP32 ve ML scriptleri üzerinde çalışılıyor (Python 3.10
 - NDK 28.2.13676358 SDK Manager'dan elle kuruldu (otomatik kurulum başarısız olmuştu).
 - Test telefonu: Samsung Galaxy S24 Ultra (SM-S928B), USB hata ayıklama açık.
 - Emülatör kullanılamaz (Bluetooth yok); beacon testleri gerçek telefonda.
+- Node.js 22.16 ve Firebase CLI 15.32 kurulu (Aşama 3 fonksiyonları ve Emulator için).
+- Kotlin `firebase-functions` Firebase BoM **35.2.0** ile ekli; BoM sürümü FlutterFire'ın
+  kullandığıyla aynı olmalı (firebase_core yükseltilirse buna da bak). JUnit testlerinde
+  Android sınıfları (or. `FirebaseFunctionsException.Code`) çalışmaz; test edilecek mantık
+  Android'e bağlı olmayan fonksiyonlara ayrılmalı.
 - Repo uzun yol sorununa karşı kısa bir yolda tutulmalı; `git config --global core.longpaths true`.
 - Flutter projesini kopyalarken `build/`, `.dart_tool/`, `.gradle/`, `.idea/`, `local.properties`
   hariç tutulmalı (Windows 260 karakter yol sınırı).
@@ -220,6 +231,13 @@ flutter run            # telefon USB ile bağlı olmalı; terminalde r = hot rel
 Web paneli: `web/config.js` gerekli. Proje kökünde
 `python -m http.server 8000 --bind 127.0.0.1 --directory web` → http://localhost:8000
 (`.claude/launch.json`'da `web-panel` olarak da tanımlı). Dosyayı çift tıklayıp `file://` ile açma.
+
+Birim testleri:
+```bash
+cd mobile/android && ./gradlew.bat :app:testDebugUnitTest   # Kotlin (rapor: mobile/build/app/reports/tests/)
+node --test functions/test/codes.test.js                     # proje kökünde, sunucu kod hesabı
+```
+`node --test` klasör adıyla değil dosya adıyla verilmeli (Node 22 klasörü dosya sanıyor).
 
 ESP32: Arduino IDE → `esp32/beacon/beacon.ino` → Board: ESP32 Dev Module → Port: COM9 → Upload →
 Serial Monitor 115200. Doğrulama: Android'de nRF Connect uygulamasında "iBeacon" görünmeli

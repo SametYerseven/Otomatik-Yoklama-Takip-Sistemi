@@ -53,4 +53,10 @@ flutter {
 dependencies {
     implementation("org.altbeacon:android-beacon-library:2.21.2")
     implementation("androidx.core:core-ktx:1.13.1")
+    // Asama 3: checkIn fonksiyonunu Kotlin'den (uygulama kapaliyken de) cagirmak icin.
+    // BoM surumu FlutterFire'in kullandigiyla ayni olmali (firebase_core android/gradle.properties).
+    implementation(platform("com.google.firebase:firebase-bom:35.2.0"))
+    implementation("com.google.firebase:firebase-functions")
+    // Sadece bilgisayarda calisan birim testleri icin (APK'ya girmez)
+    testImplementation("junit:junit:4.13.2")
 }
