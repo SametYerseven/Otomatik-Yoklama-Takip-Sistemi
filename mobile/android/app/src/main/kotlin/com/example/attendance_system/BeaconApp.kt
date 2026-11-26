@@ -119,7 +119,10 @@ class BeaconApp : Application() {
             override fun didDetermineStateForRegion(state: Int, region: Region) {}
         })
 
-        bm.addRangeNotifier { beacons, _ -> sendRange(beacons) }
+        bm.addRangeNotifier { beacons, _ ->
+            sendRange(beacons)
+            RssiLogger.log(beacons)   // ML veri toplama modu aciksa CSV'ye yazar
+        }
 
         bm.startMonitoring(classRegion)      // giris/cikis olaylari
         bm.startRangingBeacons(classRegion)   // her taramada RSSI, major, minor

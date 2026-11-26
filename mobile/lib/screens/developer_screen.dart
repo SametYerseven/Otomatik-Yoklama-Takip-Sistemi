@@ -4,6 +4,7 @@ import '../beacon_controller.dart';
 import '../demo_data.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
+import 'data_collection_screen.dart';
 
 /// Gelistirici ekrani: demo anahtarlari, gorulen beacon'lar (RSSI, mesafe),
 /// tum giris/cikis gecmisi. Normal kullanici icin degil; test ve rapor icin.
@@ -23,6 +24,17 @@ class DeveloperScreen extends StatelessWidget {
           return ListView(
             padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
             children: [
+              const SectionTitle('Makine öğrenmesi'),
+              Card(
+                child: ListTile(
+                  leading: const Icon(Icons.sensors, color: AppColors.sky),
+                  title: const Text('Veri toplama'),
+                  subtitle: const Text('RSSI ölçümlerini etiketleyip CSV dosyasına kaydet'),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () => Navigator.of(context).push(
+                      MaterialPageRoute(builder: (_) => const DataCollectionScreen())),
+                ),
+              ),
               const SectionTitle('Demo modu'),
               Card(
                 child: Column(

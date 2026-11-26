@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'screens/data_collection_screen.dart';
 import 'student_service.dart';
 
 /// Giris ve kayit ekrani. Ustteki sekmeyle ikisi arasinda gecilir.
@@ -256,6 +257,15 @@ class _AuthScreenState extends State<AuthScreen> {
                         style: Theme.of(context).textTheme.bodySmall,
                       ),
                     ],
+                    // ML olcum gunu: arkadaslarin telefonlari hesap acmadan olcum yapabilsin
+                    if (!_isRegister)
+                      TextButton(
+                        onPressed: _busy
+                            ? null
+                            : () => Navigator.of(context).push(MaterialPageRoute(
+                                builder: (_) => const DataCollectionScreen())),
+                        child: const Text('Veri toplama modu (geliştirici)'),
+                      ),
                   ],
                 ),
               ),

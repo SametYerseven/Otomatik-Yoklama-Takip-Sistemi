@@ -3,19 +3,29 @@ import 'package:flutter/material.dart';
 
 import 'auth_gate.dart';
 import 'demo_data.dart';
+import 'screens/data_collection_screen.dart';
 import 'theme.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  // Android'de ayarlar android/app/google-services.json dosyasindan okunur
-  await Firebase.initializeApp();
+  // Android'de ayarlar android/app/google-services.json dosyasindan okunur.
+  // iOS'ta GoogleService-Info.plist henuz yok: Firebase baslamazsa uygulama sadece
+  // ML veri toplama moduyla acilir (giris/kayit olmadan).
+  var firebaseReady = true;
+  try {
+    await Firebase.initializeApp();
+  } catch (e) {
+    firebaseReady = false;
+    debugPrint('Firebase baslatilamadi, sadece veri toplama modu: $e');
+  }
   // Gelistirici ekranindaki demo anahtarlarinin son durumu
   await DemoSettings.instance.load();
-  runApp(const AttendanceApp());
+  runApp(AttendanceApp(firebaseReady: firebaseReady));
 }
 
 class AttendanceApp extends StatelessWidget {
-  const AttendanceApp({super.key});
+  final bool firebaseReady;
+  const AttendanceApp({super.key, this.firebaseReady = true});
 
   @override
   Widget build(BuildContext context) {
@@ -25,7 +35,7 @@ class AttendanceApp extends StatelessWidget {
       theme: AppTheme.light(),
       darkTheme: AppTheme.dark(),
       themeMode: ThemeMode.system, // telefon karanlik moddaysa uygulama da karanlik
-      home: const AuthGate(),
+      home: firebaseReady ? const AuthGate() : const DataCollectionScreen(standalone: true),
     );
   }
 }

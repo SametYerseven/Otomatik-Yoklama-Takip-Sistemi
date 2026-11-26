@@ -94,14 +94,24 @@ Aşama 3 `checkIn` işinden bağımsız; hangisi önce yapılacağına kullanıc
   `time, platform, phone_model, room, rssi, label, location, carry`
   (`label` 1 = sınıf içi, 0 = dışı; `location` or. front_row, back_row, door_outside, corridor_10m,
   next_room; `carry` hand / pocket / bag / desk).
-- **Uygulamaya eklenecek "veri toplama modu"** (Profil → Geliştirici):
-  1. Kotlin `RssiLogger.kt`: her tarama turunda (~1,1 sn) **ham** RSSI'yi CSV'ye yazar; uygulama
-     kapalı/ekran kapalıyken de çalışır. AltBeacon varsayılan olarak RSSI'yi ~20 sn ortalıyor,
-     ham değer alınacak şekilde ayarlanmalı.
-  2. Kanal: başlat(label, location, carry), durdur, dosya listesi. Kanal adları ve CSV formatı
-     iOS'ta aynı kalacak şekilde seçilecek.
-  3. Flutter: etiket/konum/taşıma seçimi, Başlat/Durdur, Paylaş.
-  4. Evde kısa deneme (oda içi/dışı), format kontrolü.
+- **"Veri toplama modu" (Samet/Claude 2026-11-26'da YAZDI; Samet'te Flutter yok, DERLENMEDİ ve
+  telefonda DENENMEDİ — Talha derleyip evde denemeli):**
+  1. Kotlin `RssiLogger.kt`: `BeaconApp`'in range notifier'ı her turda (~1,1 sn) `log()` çağırır;
+     uygulama/ekran kapalıyken de yazar. RSSI = `Beacon.getRssi()` (o turdaki son paket, ham);
+     ~20 sn'lik ortalama `getRunningAverageRssi()`'dir, o yazılmaz. **Talha kontrol etsin:** CSV'de
+     ardışık değerler gerçekten oynuyor mu (sabit/yumuşak görünüyorsa ortalama geliyor demektir).
+     Dosyalar `getExternalFilesDir()/rssi/`; paylaşım `FileProvider` (manifest + `res/xml/file_paths.xml`).
+  2. Kanal `attendance/rssi_logger` (MethodChannel, Android `MainActivity.kt`, iOS `AppDelegate.swift`):
+     `start{label,location,carry}` → dosya adı, `stop`, `status`, `files`, `delete{name}`,
+     `share{names}`. `location`/`carry` sadece `[a-z0-9_]`. Android'de izin yoksa `permission` hatası.
+  3. Flutter `lib/screens/data_collection_screen.dart`: konum (sınıf içi/dışı çipleri → `label`),
+     kapı (açık/kapalı → konuma `_open`/`_closed` eki), taşıma, Başlat/Durdur, saniyelik durum
+     (süre, satır, son RSSI), dosya listesi, Paylaş / Tümünü paylaş / Sil. Girişler: giriş ekranında
+     **"Veri toplama modu (geliştirici)"** (hesapsız telefonlar için) ve Profil → Geliştirici.
+     `main.dart`: Firebase başlatılamazsa (iOS'ta `GoogleService-Info.plist` yok) uygulama
+     doğrudan bu ekranla açılır.
+  4. Evde kısa deneme (oda içi/dışı), format kontrolü. CSV biçimi bilgisayarda `train.py` ile
+     sahte Android/iOS dosyalarıyla doğrulandı.
   5. Okulda ölçüm günü. 6. Python: yeni CSV ile eğitim. **`train.py` yeniden yazıldı**
      (Samet, 2026-11-26; sahte veriyle denendi, gerçek veri yok): `data/*.csv` okur, iPhone'un
      `0` satırlarını atar, filtreleri her kesintisiz ölçüm parçasında ayrı ve sadece geçmişle
@@ -112,8 +122,12 @@ Aşama 3 `checkIn` işinden bağımsız; hangisi önce yapılacağına kullanıc
      eski modeli okuyor, yeni sisteme geçince `model_phone.pkl`'a uyarlanmalı.
 - **iPhone:** iOS iBeacon'u normal Bluetooth taramasından gizler; RSSI sadece CoreLocation ile
   (UUID önceden verilerek) alınır, bu yüzden kendi uygulamamız şart (hazır tarayıcı uygulamalar
-  işe yaramaz). Swift tarafı (~1 dosya) Mac bulununca yazılacak (Mac'i ekip bulacak); Flutter
-  ekranı ortak. **Ücretsiz Apple hesabı** kullanılacak (ücretli hesap alınamıyor): uygulama 7 gün
+  işe yaramaz). Swift tarafı **yazıldı** (2026-11-26, DERLENMEDİ): `ios/Runner/AppDelegate.swift`
+  içindeki `RssiLogger` sınıfı (yeni .swift dosyası `project.pbxproj`'a eklenmeden derlenmediği için
+  aynı dosyada). CoreLocation ranging, kayıt sürerken arka plan konum oturumu (mavi gösterge),
+  `rssi == 0` satırları yazılmaz, dosyalar Belgeler/rssi (Dosyalar uygulamasında da görünür).
+  `Info.plist`'e konum izin metinleri, `UIBackgroundModes: location`, dosya paylaşımı eklendi.
+  Flutter ekranı ortak. **Ücretsiz Apple hesabı** kullanılacak (ücretli hesap alınamıyor): uygulama 7 gün
   sonra açılmaz olur (ölçümden 1–2 gün önce kurulmalı), her iPhone Mac'e kabloyla takılıp
   Xcode'dan kurulur, haftalık cihaz/uygulama sınırı var (takılırsa ikinci Apple ID), her iPhone'da
   Geliştirici Modu açılmalı ve geliştiriciye "Güven" denmeli. iPhone RSSI'yi saniyede bir,
@@ -125,6 +139,32 @@ Aşama 3 `checkIn` işinden bağımsız; hangisi önce yapılacağına kullanıc
   gereken yer **sınır**: kapı yanı sıra (içeride) ile kapının hemen önü (dışarıda). Her konumda
   telefonun yeri (el/cep/çanta/masa), sınıf boş/dolu, farklı gün/saat değiştirilmeli. Konum
   başına telefon başına en az 2–3 dk (~150 ölçüm); ilk model için toplam 1–2 saat yeterli.
+- **İlk ölçüm günü: 2026-11-27, sınıfta (Samet + Talha).** Sıra:
+  1. *Önceki gece (Talha):* `flutter run` ile Android'e kur; giriş ekranındaki "Veri toplama modu"nu
+     aç, izinleri ver, evde ESP32 açıkken 5 dk içeride/dışarıda kayıt, Paylaş ile CSV'yi al,
+     Samet'e gönder (Samet `train.py` ile format kontrolü yapar). Derleme hatası varsa düzelt.
+  2. *Götürülecekler:* ESP32 + DS3231 (saat ayarlı; `config.h`'ta test anahtarı olabilir, ölçümü
+     etkilemez), powerbank/uzatma, şarjlı telefonlar, konum notları için kâğıt.
+  3. *ESP32:* gerçek kullanımda duracağı yere koy, **fotoğrafla ve yerini not et** (model bu konuma
+     özgü). Serial Monitor'de "Yayin basladi" ya da uygulamada "Son ölçüm" görünmeli.
+  4. *Her konumda:* konum + kapı + taşıma seç → Başlat → en az 2–3 dk bekle → Durdur. Konum
+     değiştirmeden önce mutlaka Durdur. Telefonlar aynı anda aynı noktada ölçebilir. Öncelik
+     **kapı sınırı** (`door_inside_*` / `door_outside_*`, kapı açık ve kapalı, dört taşıma şekli);
+     diğer konumlarda en az `hand` + `pocket`. Kâğıda saat, sınıf boş/dolu notu. Toplam 1–2 saat.
+  5. *Sonra:* her telefondan "Tümünü paylaş" → bilgisayarda
+     `ml/ml_pipeline/ml_pipeline/data/` klasörüne → orada `python train.py --split phone --plot`
+     (tek gün olduğu için test telefonlar arasında; ikinci bir gün ölçümü modeli güvenilir yapar).
+- **Ödünç Mac ile iPhone ölçümü (2026-11-27, ilk kez denenecek):** Android ölçümü Mac'i beklememeli.
+  Mac'te gerekenler: Xcode (App Store, ~10+ GB, mümkünse önceden indirilmeli; ilk açılışta iOS
+  platformu indirilir), Flutter SDK, CocoaPods. `cd mobile && flutter pub get && cd ios && pod install`
+  (Firebase pod'ları için `ios/Podfile`'da `platform :ios, '15.0'` olmalı). Xcode'da
+  `ios/Runner.xcworkspace` → Runner → Signing & Capabilities → ücretsiz Apple ID ile Team seç;
+  `com.example...` paket adı reddedilirse benzersiz yap (or. `com.<ad>.yoklama`, commit etme).
+  iPhone: Ayarlar → Gizlilik ve Güvenlik → **Geliştirici Modu** aç (yeniden başlar); kurulumdan sonra
+  Ayarlar → Genel → VPN ve Cihaz Yönetimi → geliştiriciye **Güven**. `flutter run` (iPhone kabloyla).
+  `GoogleService-Info.plist` yok → uygulama doğrudan veri toplama ekranıyla açılır (giriş gerekmez).
+  İlk Başlat'ta konum izni sorulur ("Uygulamayı Kullanırken" yeterli; kayıt sürerken arka plan
+  oturumu açık). Ücretsiz hesap: uygulama 7 gün sonra açılmaz, haftalık uygulama/cihaz sınırı var.
 - **Eğitim:** Test kümesi rastgele değil **farklı gün ya da farklı telefon** olmalı (eski
   `train_test_split` hatası). `platform`/`phone_model`'e göre fark varsa ayrı eşik/model. Aşama 3'te
   telefon dakikada bir RSSI gönderecek; modelin girdisi (tek ölçüm mü, son 10–20 sn ortalama +
@@ -153,7 +193,8 @@ mobile/                      Flutter projesi (paket adı com.example.attendance_
                              görülen beacon'lar, giriş/çıkış geçmişi, sınıfta mı
   lib/demo_data.dart         Demo modu ayarları (shared_preferences) + örnek ders programı/yoklamalar
   lib/screens/               home_shell (alt menü), home (durum + sonraki ders), stats, profile,
-                             developer (RSSI listesi + demo anahtarları)
+                             developer (RSSI listesi + demo anahtarları), data_collection_screen
+                             (ML veri toplama: etiketli RSSI → CSV, kanal attendance/rssi_logger)
   lib/widgets/common.dart    Halka grafik, ilerleme çubuğu, etiket (grafik paketi yok)
   assets/images/             cbu_logo.png, cbu_emblem.png (uygulama simgeleri de amblemden üretildi)
   android/app/src/main/AndroidManifest.xml
@@ -163,6 +204,8 @@ mobile/                      Flutter projesi (paket adı com.example.attendance_
     StudentKeyStore.kt       Gizli HMAC anahtarı: üretme, Android Keystore'a aktarma, sign()
     AttendanceCode.kt        Aşama 3 öğrenci kodu S (msg_s bayt düzeni + sign())
     CheckInClient.kt         Aşama 3 `checkIn` callable çağrısı ve yanıt yorumlama (Result)
+    RssiLogger.kt            ML veri toplama: her taramada RSSI'yi CSV'ye yazar (FileProvider ile paylaşım)
+  ios/Runner/AppDelegate.swift  iOS: Flutter kurulumu + RssiLogger (CoreLocation ile aynı kanal)
   android/app/src/test/kotlin/.../  JUnit birim testleri (bilgisayarda çalışır, Keystore yok)
 functions/                   Aşama 3 Cloud Functions (Node.js 22, firebase-functions 7, firebase-admin 14)
   index.js                   callable `checkIn` (europe-west1, maxInstances 10); sadece bağlar
@@ -215,7 +258,7 @@ eklerken `esp32/<ad>/<ad>.ino` düzenini koru.
 | RTDB URL | `https://otomatik-yoklama-takip-sistemi-default-rtdb.europe-west1.firebasedatabase.app/` |
 | Cloud Functions bölgesi | `europe-west1` (planlanan); fonksiyon: callable `checkIn` (taslak) |
 | Android paket adı | `com.example.attendance_system` (Dart paket adı `attendance_system`) |
-| Flutter kanalları | `attendance/beacon` (MethodChannel), `attendance/beacon_events` (EventChannel), `attendance/student_key` (MethodChannel: status, createKey, deleteKey) |
+| Flutter kanalları | `attendance/beacon` (MethodChannel), `attendance/beacon_events` (EventChannel), `attendance/student_key` (MethodChannel: status, createKey, deleteKey), `attendance/rssi_logger` (MethodChannel: start, stop, status, files, delete, share; Android + iOS) |
 
 ## ESP32 notları (`beacon.ino`)
 

@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- FileProvider'in paylasabilecegi klasorler: sadece RSSI CSV dosyalari (RssiLogger.dir) -->
+<paths>
+    <external-files-path name="rssi" path="rssi/" />
+    <files-path name="rssi_internal" path="rssi/" />
+</paths>
