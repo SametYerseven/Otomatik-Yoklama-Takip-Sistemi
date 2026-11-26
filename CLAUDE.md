@@ -71,11 +71,56 @@ Gerçekçi riskler ve önlemleri:
 
 ## Bekleyen işler
 
-- Türkçe düğümler (`Ogretmenler, Siniflar, Ogrenciler, Varlik, Sistem, ML_Tahmin, RFID_Kartlar`)
-  2026-11-24'te kurallardan çıkarıldı (kuralı olmayan düğüm kapalıdır). Canlı veritabanından
-  Console'dan silinecek (önce JSON yedeği alınmalı).
-- `MLKomut` / `MLSonuclar`: onları yazan ML kodu kayıp; ML için veri yeniden toplanacak.
-  2026-11-24'te kurallarda kapatıldı (veri silinmedi); ML'e dönülünce yeni koda göre kural yazılmalı.
+- `MLKomut` / `MLSonuclar`: onları yazan ML kodu kayıp; ML için veri yeniden toplanacak (aşağıdaki
+  plan). 2026-11-24'te kurallarda kapatıldı (veri silinmedi). Yeni plan Firebase'e ML verisi
+  yazmıyor; bu düğümler ileride silinebilir.
+- Türkçe düğümler canlı veritabanından silindi (2026-11-24'ten sonra Console'dan, kullanıcı doğruladı).
+
+### ML veri toplama planı (2026-11-26, karar; kod yazılmadı)
+
+Model yeniden eğitilecek, çünkü yeni mimaride RSSI'yi ESP32 değil **telefon** ölçüyor. Eski
+`rssi_dataset.csv` (ESP32 ölçümü, art arda aynı değerleri atlıyor) ve `model.pkl` kullanılmayacak.
+Aşama 3 `checkIn` işinden bağımsız; hangisi önce yapılacağına kullanıcı karar verir.
+
+- **ESP32'de değişiklik yok:** mevcut `beacon.ino` sınıfa konur, yeri not edilir/fotoğraflanır
+  (eğitim ve gerçek kullanım aynı yerde olmalı). Telefonlar ESP32'ye bağlanmaz, sadece yayını
+  dinler; aynı anda istenen sayıda telefon ölçüm yapabilir.
+- **Telefonlar:** Hem Android hem iPhone, mümkün olduğunca çok ve farklı model (her telefonun
+  anteni farklı ölçer; tek modelle eğitilen model başka telefonda yanılır). Tüm telefonlar aynı
+  anda, aynı konumlarda ölçer.
+- **Kayıt:** Telefonda **CSV** dosyası (saatte ~0,35 MB), ölçüm sonunda uygulamadaki "Paylaş" ile
+  alınır. Firebase'e yazılmaz, kural gerekmez. İki platformda aynı sütunlar:
+  `time, platform, phone_model, room, rssi, label, location, carry`
+  (`label` 1 = sınıf içi, 0 = dışı; `location` or. front_row, back_row, door_outside, corridor_10m,
+  next_room; `carry` hand / pocket / bag / desk).
+- **Uygulamaya eklenecek "veri toplama modu"** (Profil → Geliştirici):
+  1. Kotlin `RssiLogger.kt`: her tarama turunda (~1,1 sn) **ham** RSSI'yi CSV'ye yazar; uygulama
+     kapalı/ekran kapalıyken de çalışır. AltBeacon varsayılan olarak RSSI'yi ~20 sn ortalıyor,
+     ham değer alınacak şekilde ayarlanmalı.
+  2. Kanal: başlat(label, location, carry), durdur, dosya listesi. Kanal adları ve CSV formatı
+     iOS'ta aynı kalacak şekilde seçilecek.
+  3. Flutter: etiket/konum/taşıma seçimi, Başlat/Durdur, Paylaş.
+  4. Evde kısa deneme (oda içi/dışı), format kontrolü.
+  5. Okulda ölçüm günü. 6. Python: yeni CSV ile eğitim (`train.py` yeniden yazılır).
+- **iPhone:** iOS iBeacon'u normal Bluetooth taramasından gizler; RSSI sadece CoreLocation ile
+  (UUID önceden verilerek) alınır, bu yüzden kendi uygulamamız şart (hazır tarayıcı uygulamalar
+  işe yaramaz). Swift tarafı (~1 dosya) Mac bulununca yazılacak (Mac'i ekip bulacak); Flutter
+  ekranı ortak. **Ücretsiz Apple hesabı** kullanılacak (ücretli hesap alınamıyor): uygulama 7 gün
+  sonra açılmaz olur (ölçümden 1–2 gün önce kurulmalı), her iPhone Mac'e kabloyla takılıp
+  Xcode'dan kurulur, haftalık cihaz/uygulama sınırı var (takılırsa ikinci Apple ID), her iPhone'da
+  Geliştirici Modu açılmalı ve geliştiriciye "Güven" denmeli. iPhone RSSI'yi saniyede bir,
+  o saniyenin ortalaması olarak verir; duyamadığında `0` verir (bu satırlar atılmalı). Cepte
+  ölçüm için "Her zaman" konum izni + arka plan konum oturumu gerekir (yedek: ekran açık ölçüm).
+  Gerçek öğrencilere iPhone dağıtımı ücretsiz hesapla mümkün değil; raporda kısıt olarak yazılmalı.
+- **Ölçüm konumları:** Sınıf içi: ön/orta/arka sıra, köşeler, kapı yanı sıra, yürüme. Dışı: kapının
+  hemen önü, koridor 5/10/20 m, yan sınıf, alt/üst kat, kapı açık/kapalı. En önemli ve en çok veri
+  gereken yer **sınır**: kapı yanı sıra (içeride) ile kapının hemen önü (dışarıda). Her konumda
+  telefonun yeri (el/cep/çanta/masa), sınıf boş/dolu, farklı gün/saat değiştirilmeli. Konum
+  başına telefon başına en az 2–3 dk (~150 ölçüm); ilk model için toplam 1–2 saat yeterli.
+- **Eğitim:** Test kümesi rastgele değil **farklı gün ya da farklı telefon** olmalı (eski
+  `train_test_split` hatası). `platform`/`phone_model`'e göre fark varsa ayrı eşik/model. Aşama 3'te
+  telefon dakikada bir RSSI gönderecek; modelin girdisi (tek ölçüm mü, son 10–20 sn ortalama +
+  dalgalanma mı) ham veriden sonra seçilecek.
 
 ## Klasör yapısı
 
