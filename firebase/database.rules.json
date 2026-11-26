@@ -18,6 +18,9 @@
     "MLKomut":      { ".read": false, ".write": false },
     "MLSonuclar":   { ".read": false, ".write": false },
 
+    "RoomSecrets":     { ".read": false, ".write": false },
+    "CheckInFailures": { ".read": false, ".write": false },
+
     "StudentAccounts": {
       "$uid": {
         ".read": "auth != null && auth.uid === $uid",

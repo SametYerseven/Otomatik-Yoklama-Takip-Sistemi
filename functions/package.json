@@ -1,0 +1,16 @@
+{
+  "name": "attendance-functions",
+  "description": "Asama 3 Cloud Functions: checkIn",
+  "private": true,
+  "main": "index.js",
+  "engines": {
+    "node": "22"
+  },
+  "scripts": {
+    "test": "node --test test/codes.test.js test/checkin.test.js"
+  },
+  "dependencies": {
+    "firebase-admin": "^14.5.1",
+    "firebase-functions": "^7.4.0"
+  }
+}

@@ -1,160 +1,271 @@
-import pandas as pd
-import numpy as np
+"""
+YENI RSSI MODELI EGITIMI (CLAUDE.md "ML veri toplama plani", 2026-11-26)
+-----------------------------------------------------------------------
+Telefonun olctugu RSSI'den ogrencinin sinifin icinde (1) mi disinda (0) mi oldugunu tahmin eden
+karar agacini egitir. Eski rssi_dataset.csv (ESP32 olcumu) KULLANILMAZ.
+
+Girdi: data/ klasorundeki CSV'ler (telefondaki veri toplama modundan "Paylas" ile alinan dosyalar).
+  Sutunlar: time, platform, phone_model, room, rssi, label, location, carry
+  label 1 = sinif ici, 0 = disi. iPhone duyamadiginda rssi = 0 yazar: bu satirlar atilir.
+
+Eski egitimdeki iki hata duzeltildi:
+  1. Filtreler (hareketli ortalama, Kalman) butun veri boyunca degil, her kesintisiz olcum
+     parcasinda ayri ve sadece gecmis olcumlerle hesaplanir (canli kullanimdaki gibi).
+  2. Test verisi rastgele satirlardan degil, modelin hic gormedigi bir GUNDEN (ya da TELEFONDAN)
+     secilir. Rastgele bolme, art arda neredeyse ayni olcumleri hem egitime hem teste koyup
+     dogrulugu oldugundan yuksek gosteriyordu.
+
+Modelin girdisi henuz secilmedi (tek olcum mu, son 10-20 sn mi): script hepsini dener,
+karsilastirir, en iyisiyle son modeli kaydeder.
+
+Kullanim (bu klasorde):
+  python train.py                      # data/*.csv, her gun sirayla test edilir
+  python train.py --split phone        # her telefon modeli sirayla test edilir
+  python train.py --data baska_klasor --plot
+Cikti: model_phone.pkl (live_prediction.py yeni modele gecince bunu okuyacak)
+"""
+
+import argparse
+import glob
+import os
 import pickle
-import matplotlib.pyplot as plt
-from sklearn.tree import DecisionTreeClassifier, plot_tree
-from sklearn.model_selection import train_test_split
-from sklearn.metrics import accuracy_score, confusion_matrix, classification_report
+import sys
+from datetime import datetime, timezone
 
-print("=" * 50)
-print("   MCBÜ - RSSI MODEL EĞİTİM ARACI")
-print("=" * 50)
+import numpy as np
+import pandas as pd
+from sklearn.metrics import confusion_matrix
+from sklearn.model_selection import GroupKFold, LeaveOneGroupOut
+from sklearn.tree import DecisionTreeClassifier, export_text
 
-# ==========================================================
-# 1. VERİYİ YÜKLE
-# ==========================================================
-print("\n[1/5] Veri yükleniyor...")
-df = pd.read_csv("rssi_dataset.csv")
-print(f"  Toplam veri: {len(df)} satır")
-print(f"  Sınıf İçi (1): {len(df[df['Sinif_Ici_Mi'] == 1])}")
-print(f"  Koridor  (0): {len(df[df['Sinif_Ici_Mi'] == 0])}")
+COLUMNS = ["time", "platform", "phone_model", "room", "rssi", "label", "location", "carry"]
+SEGMENT_GAP_S = 10            # bu kadar sn olcum gelmezse yeni parca baslar
+KALMAN_Q, KALMAN_R = 0.01, 2.0
+# Denenecek model girdileri: (ad, pencere sn, ozellikler)
+FEATURE_SETS = [
+    ("tek olcum", 0, ["rssi"]),
+    ("son 10 sn", 10, ["rssi", "mean", "std", "kalman"]),
+    ("son 20 sn", 20, ["rssi", "mean", "std", "kalman"]),
+]
 
-# ==========================================================
-# 2. VERİ TEMİZLEME — MOVING AVERAGE
-# ==========================================================
-print("\n[2/5] Moving Average filtresi uygulanıyor...")
+sys.stdout.reconfigure(encoding="utf-8")
 
-window = 5  # Son 5 ölçümün ortalaması
-df["RSSI_MA"] = df["RSSI"].rolling(window=window, min_periods=1).mean()
 
-print(f"  Pencere boyutu: {window}")
-print(f"  Ham RSSI      → Ort: {df['RSSI'].mean():.1f} dBm | Std: {df['RSSI'].std():.1f}")
-print(f"  Filtreli RSSI → Ort: {df['RSSI_MA'].mean():.1f} dBm | Std: {df['RSSI_MA'].std():.1f}")
+# ---------------------------------------------------------------------------
+# 1. Veri
+# ---------------------------------------------------------------------------
 
-# ==========================================================
-# 3. VERİ TEMİZLEME — KALMAN FİLTRESİ
-# ==========================================================
-print("\n[3/5] Kalman Filtresi uygulanıyor...")
+def parse_time(col):
+    """ISO metin ya da Unix zamani (sn/ms) -> UTC zaman."""
+    numeric = pd.to_numeric(col, errors="coerce")
+    if numeric.notna().all():
+        unit = "ms" if numeric.median() > 1e12 else "s"
+        return pd.to_datetime(numeric, unit=unit, utc=True)
+    return pd.to_datetime(col, utc=True, format="mixed")
 
-def kalman_filter(measurements, Q=0.01, R=2.0):
-    """
-    Q = Süreç gürültüsü (düşük = daha pürüzsüz)
-    R = Ölçüm gürültüsü (yüksek = ölçüme daha az güven)
-    """
-    n = len(measurements)
-    estimates = np.zeros(n)
-    
-    x = measurements[0]   # Başlangıç tahmini
-    P = 1.0           # Başlangıç hatası
-    
-    for i, z in enumerate(measurements):
-        # Tahmin adımı
-        P = P + Q
-        # Güncelleme adımı
-        K = P / (P + R)          # Kalman kazancı
-        x = x + K * (z - x)     # Tahmini güncelle
-        P = (1 - K) * P          # Hata kovaryansını güncelle
-        estimates[i] = x
-    
-    return estimates
 
-df["RSSI_Kalman"] = kalman_filter(df["RSSI"].values)
+def load(folder):
+    files = sorted(glob.glob(os.path.join(folder, "*.csv")))
+    if not files:
+        sys.exit(f"'{folder}' klasorunde CSV dosyasi yok. Telefonlardan alinan dosyalari buraya koy.")
+    frames = []
+    for path in files:
+        df = pd.read_csv(path)
+        missing = sorted(set(COLUMNS) - set(df.columns))
+        if missing:
+            sys.exit(f"{path}: eksik sutun(lar): {missing}")
+        df = df[COLUMNS].copy()
+        df["file"] = os.path.basename(path)
+        frames.append(df)
+    df = pd.concat(frames, ignore_index=True)
 
-print(f"  Kalman RSSI → Ort: {df['RSSI_Kalman'].mean():.1f} dBm | Std: {df['RSSI_Kalman'].std():.1f}")
+    df["time"] = parse_time(df["time"])
+    df["rssi"] = pd.to_numeric(df["rssi"], errors="coerce")
+    df["label"] = pd.to_numeric(df["label"], errors="coerce")
+    total = len(df)
+    # iPhone duyamadiginda 0 yazar; -110'dan zayif degerler de gercekci degil
+    df = df[(df["rssi"] < 0) & (df["rssi"] > -110) & df["label"].isin([0, 1])].copy()
+    df["label"] = df["label"].astype(int)
+    df = df.sort_values(["file", "time"]).reset_index(drop=True)
+    df["day"] = df["time"].dt.strftime("%Y-%m-%d")
 
-# ==========================================================
-# 4. MODEL EĞİTİMİ
-# ==========================================================
-print("\n[4/5] Decision Tree modeli eğitiliyor...")
+    # Kesintisiz olcum parcalari: ayni dosya + ayni etiket/konum/tasima + 10 sn'den kisa bosluk
+    keys = ["file", "label", "location", "carry", "phone_model"]
+    changed = (df[keys] != df[keys].shift()).any(axis=1)
+    gap = df["time"].diff().dt.total_seconds().fillna(np.inf) > SEGMENT_GAP_S
+    df["segment"] = (changed | gap).cumsum()
 
-# Özellikler: Ham RSSI, Moving Average, Kalman
-X = df[["RSSI", "RSSI_MA", "RSSI_Kalman"]].values
-y = df["Sinif_Ici_Mi"].values
+    print(f"  {len(files)} dosya, {total} satir; gecersiz {total - len(df)} satir atildi, {len(df)} kaldi")
+    print(f"  Sinif ici (1): {(df.label == 1).sum()}   Disi (0): {(df.label == 0).sum()}")
+    print(f"  Gun: {df.day.nunique()}  Telefon: {df.phone_model.nunique()} "
+          f"({', '.join(sorted(df.phone_model.astype(str).unique()))})  Olcum parcasi: {df.segment.nunique()}")
+    return df
 
-# %80 eğitim, %20 test
-X_train, X_test, y_train, y_test = train_test_split(
-    X, y, test_size=0.2, random_state=42, stratify=y
-)
 
-model = DecisionTreeClassifier(
-    max_depth=5,          # Aşırı öğrenmeyi önler
-    min_samples_split=10, # Dal açmak için minimum veri
-    min_samples_leaf=5,   # Yaprakta minimum veri
-    random_state=42
-)
-model.fit(X_train, y_train)
+# ---------------------------------------------------------------------------
+# 2. Ozellikler (her parcada ayri, sadece gecmis olcumlerle)
+# ---------------------------------------------------------------------------
 
-# ==========================================================
-# 5. SONUÇLAR
-# ==========================================================
-print("\n[5/5] Sonuçlar hesaplanıyor...")
+def kalman(values, q=KALMAN_Q, r=KALMAN_R):
+    """Tek boyutlu Kalman filtresi. q kucuk: daha puruzsuz; r buyuk: olcume daha az guven."""
+    out = np.empty(len(values))
+    x, p = values[0], 1.0
+    for i, z in enumerate(values):
+        p += q
+        k = p / (p + r)
+        x += k * (z - x)
+        p *= 1 - k
+        out[i] = x
+    return out
 
-y_pred = model.predict(X_test)
-accuracy = accuracy_score(y_test, y_pred)
-cm = confusion_matrix(y_test, y_pred)
 
-print("\n" + "=" * 50)
-print(f"  MODEL DOĞRULUĞU: %{accuracy * 100:.1f}")
-print("=" * 50)
-print("\nKarışıklık Matrisi:")
-print(f"  Gerçek KORİDOR - Tahmin KORİDOR : {cm[0][0]} ✓")
-print(f"  Gerçek KORİDOR - Tahmin SINIF   : {cm[0][1]} ✗")
-print(f"  Gerçek SINIF   - Tahmin KORİDOR : {cm[1][0]} ✗")
-print(f"  Gerçek SINIF   - Tahmin SINIF   : {cm[1][1]} ✓")
+def add_features(df):
+    parts = []
+    for _, seg in df.groupby("segment", sort=False):
+        f = pd.DataFrame(index=seg.index)
+        f["kalman"] = kalman(seg["rssi"].to_numpy(dtype=float))
+        series = pd.Series(seg["rssi"].to_numpy(dtype=float), index=seg["time"])
+        for window in sorted({w for _, w, _ in FEATURE_SETS if w > 0}):
+            roll = series.rolling(f"{window}s", min_periods=1)
+            f[f"mean_{window}"] = roll.mean().to_numpy()
+            f[f"std_{window}"] = roll.std().fillna(0).to_numpy()
+        parts.append(f)
+    return df.join(pd.concat(parts))
 
-print("\nDetaylı Rapor:")
-print(classification_report(y_test, y_pred,
-      target_names=["Koridor (0)", "Sınıf İçi (1)"]))
 
-# Özellik önem sıralaması
-print("Özellik Önem Sıralaması:")
-features = ["Ham RSSI", "Moving Average", "Kalman"]
-for name, importance in sorted(zip(features, model.feature_importances_),
-                          key=lambda x: x[1], reverse=True):
-    bar = "█" * int(importance * 30)
-    print(f"  {name:<18}: {bar} {importance*100:.1f}%")
+def feature_columns(window, names):
+    return [f"{n}_{window}" if n in ("mean", "std") else n for n in names]
 
-# ==========================================================
-# 6. MODELİ KAYDET
-# ==========================================================
-with open("model.pkl", "wb") as f:
-    pickle.dump({
-        "model": model,
-        "kalman_Q": 0.01,
-        "kalman_R": 2.0,
-        "ma_pencere": window
-    }, f)
 
-print("\n✓ Model 'model.pkl' olarak kaydedildi.")
+# ---------------------------------------------------------------------------
+# 3. Degerlendirme: model hic gormedigi gun/telefonda test edilir
+# ---------------------------------------------------------------------------
 
-# ==========================================================
-# 7. GRAFİK — İsteğe bağlı
-# ==========================================================
-answer = input("\nGrafik gösterilsin mi? (e/h): ").strip().lower()
-if answer == "e":
-    fig, axes = plt.subplots(2, 1, figsize=(14, 8))
-    fig.suptitle("MCBÜ - RSSI Sinyal Analizi", fontsize=14, fontweight='bold')
+def new_model():
+    return DecisionTreeClassifier(max_depth=4, min_samples_leaf=20, class_weight="balanced", random_state=42)
 
-    # Grafik 1: Sinyal karşılaştırma
-    ax1 = axes[0]
-    ax1.plot(df["RSSI"].values[:150], alpha=0.4, color="gray",  label="Ham RSSI")
-    ax1.plot(df["RSSI_MA"].values[:150], color="blue",  linewidth=1.5, label="Moving Average")
-    ax1.plot(df["RSSI_Kalman"].values[:150], color="red", linewidth=1.5, label="Kalman")
-    ax1.set_title("Sinyal Filtreleme Karşılaştırması (İlk 150 Ölçüm)")
-    ax1.set_ylabel("RSSI (dBm)")
-    ax1.legend()
-    ax1.grid(True, alpha=0.3)
 
-    # Grafik 2: Karar ağacı
-    ax2 = axes[1]
-    plot_tree(model, feature_names=["RSSI", "RSSI_MA", "RSSI_Kalman"],
-              class_names=["Koridor", "Sınıf İçi"],
-              filled=True, rounded=True, ax=ax2, max_depth=3, fontsize=8)
-    ax2.set_title("Decision Tree Yapısı (İlk 3 Derinlik)")
+def out_of_group_predictions(df, columns, group_col):
+    groups = df[group_col]
+    if groups.nunique() >= 2:
+        splitter = LeaveOneGroupOut() if groups.nunique() <= 10 else GroupKFold(n_splits=5)
+    else:
+        # Tek gun/telefon: en azindan ayni olcum parcasi hem egitimde hem testte olmasin
+        groups = df["segment"]
+        splitter = GroupKFold(n_splits=min(5, groups.nunique()))
+    pred = np.empty(len(df), dtype=int)
+    X, y = df[columns].to_numpy(), df["label"].to_numpy()
+    for train_idx, test_idx in splitter.split(X, y, groups):
+        model = new_model().fit(X[train_idx], y[train_idx])
+        pred[test_idx] = model.predict(X[test_idx])
+    return pred
 
-    plt.tight_layout()
-    plt.savefig("rssi_analysis.png", dpi=150, bbox_inches='tight')
-    plt.show()
-    print("✓ Grafik 'rssi_analysis.png' olarak kaydedildi.")
 
-print("\nEğitim tamamlandı!")
+def rates(y, pred):
+    cm = confusion_matrix(y, pred, labels=[0, 1])
+    outside, inside = cm[0].sum(), cm[1].sum()
+    return {
+        "dogruluk": (cm[0, 0] + cm[1, 1]) / max(1, cm.sum()),
+        # Disaridakini iceride sanmak: kopya cekmeye kapi acar
+        "disari_iceri": cm[0, 1] / max(1, outside),
+        # Iceridekini disarida sanmak: ogrenciye haksizlik
+        "iceri_disari": cm[1, 0] / max(1, inside),
+        "cm": cm,
+    }
+
+
+def pct(x):
+    return f"%{x * 100:5.1f}"
+
+
+def breakdown(df, pred, by):
+    print(f"\n  {by} bazinda:")
+    for value, idx in df.groupby(by).groups.items():
+        r = rates(df.loc[idx, "label"], pred[df.index.get_indexer(idx)])
+        print(f"    {str(value):<22} n={len(idx):<6} dogruluk {pct(r['dogruluk'])}")
+
+
+# ---------------------------------------------------------------------------
+
+def main():
+    parser = argparse.ArgumentParser(description="Telefon RSSI modeli egitimi")
+    parser.add_argument("--data", default="data", help="CSV klasoru (varsayilan: data)")
+    parser.add_argument("--split", choices=["day", "phone"], default="day",
+                        help="test icin ayrilacak grup: day (gun) ya da phone (telefon modeli)")
+    parser.add_argument("--out", default="model_phone.pkl")
+    parser.add_argument("--plot", action="store_true", help="konum bazinda RSSI grafigini kaydet")
+    args = parser.parse_args()
+    group_col = "day" if args.split == "day" else "phone_model"
+
+    print("=" * 60)
+    print("  MCBU - TELEFON RSSI MODEL EGITIMI")
+    print("=" * 60)
+    print("\n[1/4] Veri yukleniyor...")
+    df = add_features(load(args.data))
+    if df[group_col].nunique() < 2:
+        print(f"\n  UYARI: Tek {'gun' if group_col == 'day' else 'telefon'} var. Test, olcum parcalari "
+              "arasinda yapilacak; sonuc iyimser olabilir. Ikinci bir gun/telefon olcumu ekleyin.")
+
+    print(f"\n[2/4] Model girdileri karsilastiriliyor (test grubu: {'gun' if group_col == 'day' else 'telefon'})")
+    print(f"  {'Girdi':<12} {'Dogruluk':>9} {'Disari->Iceri':>14} {'Iceri->Disari':>14}")
+    results = []
+    for name, window, names in FEATURE_SETS:
+        columns = feature_columns(window, names)
+        pred = out_of_group_predictions(df, columns, group_col)
+        r = rates(df["label"], pred)
+        results.append((r["dogruluk"], name, window, columns, pred, r))
+        print(f"  {name:<12} {pct(r['dogruluk']):>9} {pct(r['disari_iceri']):>14} {pct(r['iceri_disari']):>14}")
+    print("  (Disari->Iceri: disaridaki ogrenciyi iceride sanma orani; dusuk olmali)")
+
+    accuracy, name, window, columns, pred, r = max(results, key=lambda t: t[0])
+    print(f"\n[3/4] En iyi girdi: {name}")
+    cm = r["cm"]
+    print(f"  Gercek DISI  -> tahmin DISI {cm[0, 0]:<6} tahmin ICI  {cm[0, 1]}")
+    print(f"  Gercek ICI   -> tahmin DISI {cm[1, 0]:<6} tahmin ICI  {cm[1, 1]}")
+    breakdown(df, pred, "platform")
+    breakdown(df, pred, "phone_model")
+    breakdown(df, pred, "location")
+    breakdown(df, pred, "carry")
+
+    print("\n[4/4] Son model butun veriyle egitiliyor...")
+    model = new_model().fit(df[columns].to_numpy(), df["label"].to_numpy())
+    print("\n  Karar kurallari:")
+    print("    " + export_text(model, feature_names=columns, decimals=1).replace("\n", "\n    "))
+    with open(args.out, "wb") as f:
+        pickle.dump({
+            "model": model,
+            "features": columns,          # live_prediction ayni sirayla hesaplamali
+            "window_s": window,           # 0 = tek olcum
+            "kalman_q": KALMAN_Q,
+            "kalman_r": KALMAN_R,
+            "test_split": group_col,
+            "test_accuracy": float(accuracy),
+            "rows": int(len(df)),
+            "trained_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        }, f)
+    print(f"  Kaydedildi: {args.out}  (test dogrulugu {pct(accuracy)})")
+
+    if args.plot:
+        import matplotlib
+        matplotlib.use("Agg")
+        import matplotlib.pyplot as plt
+        order = df.groupby("location")["rssi"].median().sort_values(ascending=False).index
+        fig, ax = plt.subplots(figsize=(12, 5))
+        data = [df.loc[df.location == loc, "rssi"] for loc in order]
+        box = ax.boxplot(data, patch_artist=True)
+        ax.set_xticks(range(1, len(order) + 1), order, rotation=30, ha="right")
+        for patch, loc in zip(box["boxes"], order):
+            inside = df.loc[df.location == loc, "label"].mean() >= 0.5
+            patch.set_facecolor("#9fd8b5" if inside else "#f2b8be")
+        ax.set_ylabel("RSSI (dBm)")
+        ax.set_title("Konuma gore RSSI (yesil: sinif ici, kirmizi: disi)")
+        ax.grid(True, alpha=0.3)
+        fig.tight_layout()
+        fig.savefig("rssi_by_location.png", dpi=150)
+        print("  Grafik kaydedildi: rssi_by_location.png")
+
+    print("\nEgitim tamamlandi.")
+
+
+if __name__ == "__main__":
+    main()

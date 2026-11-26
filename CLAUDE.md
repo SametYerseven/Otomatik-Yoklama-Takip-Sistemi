@@ -42,7 +42,7 @@ derste ne kadar kaldığının takip edilmesi. Bileşenler: ESP32 (sınıfta), F
 |---|---|---|
 | 1 | ESP32 sabit iBeacon + Android arka plan algılama testi | **Tamamlandı**, Galaxy S24 Ultra'da test edildi: uygulama kapalıyken "Sınıfa girdin/çıktın" bildirimleri geliyor |
 | 2 | Öğrenci kaydı, gizli anahtar | **Tamamlandı** (2026-11-18), Galaxy S24 Ultra'da test edildi: kayıt, giriş, çıkış, tekrar giriş, aynı numarayla ikinci kayıt engelleniyor ve uyarı gösteriliyor. `firebase/database.rules.json` Firebase'de yayında |
-| 3 | Dönen sınıf kodu (ESP32), öğrenci kodu (telefon), Cloud Functions doğrulaması, `Presence`'a yazma | **Kodlanıyor** (protokol `docs/protocol.md`, 2026-11-26'da kabul edildi). Adım adım yapılıyor: ✅ Kotlin öğrenci kodu (`AttendanceCode.kt`) ✅ Kotlin `checkIn` istemcisi (`CheckInClient.kt`, henüz taramaya bağlı değil) ✅ sunucu kod hesabı (`functions/codes.js`) — hepsi test vektörleriyle birim testli. ✅ DS3231 saat modülü (Samet, 2026-11-26, `esp32/rtc_test`): ayarlama, reset ve 6–7 dk elektrik kesintisi sonrası saat korunuyor. ✅ ESP32 dönen C (`beacon.ino`, Samet, 2026-11-26): açılışta test vektörleriyle öz-test yapar; kartta test edildi (öz-test TAMAM, art arda 3 dilimde C `codes.js` ile aynı). Sıradaki: `functions/index.js` (`checkIn`, 8 kontrol + `Presence` yazımı, Emulator'da) → `BeaconApp`'e bağlama (60 sn, en güçlü beacon, `no-key` → anahtar yenileme) → Blaze + deploy. ✅ Panel `lastSeen` kuralı (Samet, 2026-11-26, demo modunda test edildi; `phoneOff` demo öğrencisi 150 sn kuralını gösterir) (gerçek sınıf anahtarı: `new_room_key.ps1` → `config.h` + `RoomSecrets`) |
+| 3 | Dönen sınıf kodu (ESP32), öğrenci kodu (telefon), Cloud Functions doğrulaması, `Presence`'a yazma | **Kodlanıyor** (protokol `docs/protocol.md`, 2026-11-26'da kabul edildi). Adım adım yapılıyor: ✅ Kotlin öğrenci kodu (`AttendanceCode.kt`) ✅ Kotlin `checkIn` istemcisi (`CheckInClient.kt`, henüz taramaya bağlı değil) ✅ sunucu kod hesabı (`functions/codes.js`) — hepsi test vektörleriyle birim testli. ✅ DS3231 saat modülü (Samet, 2026-11-26, `esp32/rtc_test`): ayarlama, reset ve 6–7 dk elektrik kesintisi sonrası saat korunuyor. ✅ ESP32 dönen C (`beacon.ino`, Samet, 2026-11-26): açılışta test vektörleriyle öz-test yapar; kartta test edildi (öz-test TAMAM, art arda 3 dilimde C `codes.js` ile aynı). ✅ Panel `lastSeen` kuralı (Samet, 2026-11-26, demo modunda test edildi; `phoneOff` demo öğrencisi 150 sn kuralını gösterir). ✅ `checkIn` fonksiyonu (`functions/index.js` + `checkin.js`, Samet, 2026-11-26): 8 kontrol + `Presence` yazımı + günlük 10 hatalı deneme sınırı + tek `bad-code` nedeni; 13 birim testi ve Emulator'da uçtan uca deneme (10/10) geçti; **henüz yayında değil**. Sıradaki: `BeaconApp`'e bağlama (60 sn, en güçlü beacon, `no-key` → anahtar yenileme; Talha) → ESP32 + Android telefon + Emulator ile uçtan uca → Blaze + `firebase deploy --only functions` → kuralları yayınla → gerçek sınıf anahtarı (`new_room_key.ps1` → `config.h` + `RoomSecrets/{derslik}`) |
 | — | iOS (Swift + CoreLocation) | Yapılmadı, Mac gerekiyor |
 | — | Öğretmen paneline Firebase Auth | **Tamamlandı** (2026-11-18): e-posta/şifre girişi, `TeacherAccounts` eşlemesi, sıkı kurallar Firebase'de yayında. Şimdilik iki test hesabı, ikisi de `osman_altay`'a bağlı: Samet'in hesabı ve Talha'nın 2026-11-24'te açtığı test öğretmen hesabı. Gerçek öğretmen hesapları açılınca ikisi de silinmeli (Authentication → Users ve `TeacherAccounts/{uid}`) |
 | — | Öğretmen paneline "Cihazı sıfırla" | **Tamamlandı** (2026-11-24): panelde her zaman açık "Öğrenciler" sekmesi → öğrenci detayı → buton; kurallar Firebase'de yayında. Aynı telefonda sıfırlanırsa uygulama bir sonraki açılışta anahtarı yeniler. Galaxy S24 Ultra'da test edildi: normal açılış, aynı telefonda sıfırlama, uygulamayı silip kurma (sıfırlamasız engelleniyor, sıfırlamayla açılıyor), panel sekmesi |
@@ -102,7 +102,14 @@ Aşama 3 `checkIn` işinden bağımsız; hangisi önce yapılacağına kullanıc
      iOS'ta aynı kalacak şekilde seçilecek.
   3. Flutter: etiket/konum/taşıma seçimi, Başlat/Durdur, Paylaş.
   4. Evde kısa deneme (oda içi/dışı), format kontrolü.
-  5. Okulda ölçüm günü. 6. Python: yeni CSV ile eğitim (`train.py` yeniden yazılır).
+  5. Okulda ölçüm günü. 6. Python: yeni CSV ile eğitim. **`train.py` yeniden yazıldı**
+     (Samet, 2026-11-26; sahte veriyle denendi, gerçek veri yok): `data/*.csv` okur, iPhone'un
+     `0` satırlarını atar, filtreleri her kesintisiz ölçüm parçasında ayrı ve sadece geçmişle
+     hesaplar, testi gün (`--split day`) ya da telefon (`--split phone`) bazında yapar, "tek ölçüm /
+     son 10 sn / son 20 sn" girdilerini karşılaştırır, konum/telefon/taşıma bazında doğruluk ve
+     "dışarıdakini içeride sanma" oranını yazar, en iyisini `model_phone.pkl`'a kaydeder
+     (`--plot`: `rssi_by_location.png`). Eski `model.pkl`'ı ezmez; `live_prediction.py` henüz
+     eski modeli okuyor, yeni sisteme geçince `model_phone.pkl`'a uyarlanmalı.
 - **iPhone:** iOS iBeacon'u normal Bluetooth taramasından gizler; RSSI sadece CoreLocation ile
   (UUID önceden verilerek) alınır, bu yüzden kendi uygulamamız şart (hazır tarayıcı uygulamalar
   işe yaramaz). Swift tarafı (~1 dosya) Mac bulununca yazılacak (Mac'i ekip bulacak); Flutter
@@ -157,9 +164,15 @@ mobile/                      Flutter projesi (paket adı com.example.attendance_
     AttendanceCode.kt        Aşama 3 öğrenci kodu S (msg_s bayt düzeni + sign())
     CheckInClient.kt         Aşama 3 `checkIn` callable çağrısı ve yanıt yorumlama (Result)
   android/app/src/test/kotlin/.../  JUnit birim testleri (bilgisayarda çalışır, Keystore yok)
-functions/                   Aşama 3 Cloud Functions (Node.js)
+functions/                   Aşama 3 Cloud Functions (Node.js 22, firebase-functions 7, firebase-admin 14)
+  index.js                   callable `checkIn` (europe-west1, maxInstances 10); sadece bağlar
+  checkin.js                 karar mantığı (8 kontrol, hatalı deneme sınırı, Presence yazımı);
+                             veritabanı { get, update, transaction } nesnesiyle verilir
   codes.js                   T, C, S hesabı ve doğrulaması (Firebase'siz, saf hesap)
   test/codes.test.js         protocol.md test vektörleri (node:test, ek paket yok)
+  test/checkin.test.js       checkIn mantığı, bellekteki sahte veritabanıyla
+  test/emulator_smoke.js     Emulator'da gerçek fonksiyon + DB + Auth + kurallar (telefonu taklit eder)
+  node_modules/              git'te yok; `cd functions; npm install` ile kurulur
 web/                         Öğretmen paneli (HTML/JS, Firebase JS SDK v8, SheetJS ile Excel).
                              Açık tema + CBÜ laciverti. Görünümler: Genel Bakış, Derslerim,
                              Öğrenciler (liste, ekle/sil), Aktif Yoklama (öğrenci kartları), Uyarılar;
@@ -167,7 +180,9 @@ web/                         Öğretmen paneli (HTML/JS, Firebase JS SDK v8, She
                              app.js'te tüm DB işlemleri `Store` üzerinden; `?demo=1` ile bellekteki
                              örnek verilerle açılır, Firebase'e bağlanmaz/yazmaz, config.js gerekmez.
                              RFID kaldırıldı (kapsam dışı).
-firebase.json, .firebaserc   Firebase Hosting ayarı (web/ yayınlanır; deploy: --only hosting)
+firebase.json, .firebaserc   Hosting (web/), functions, database (kurallar dosyası) ve Emulator
+                             portları (auth 9099, database 9000, functions 5001, ui 4000).
+                             Deploy her zaman hedefli: --only hosting / functions / database
 firebase/database.json       Örnek başlangıç verisi
 firebase/database.rules.json RTDB kuralları (Console → Realtime Database → Kurallar'a elle yapıştırılır)
 ml/ml_pipeline/              Visual Studio çözümü (ml_pipeline.slnx)
@@ -312,9 +327,19 @@ bilgisayarında Firebase CLI 15.37 kurulu ve giriş yapılmış.
 Birim testleri:
 ```bash
 cd mobile/android && ./gradlew.bat :app:testDebugUnitTest   # Kotlin (rapor: mobile/build/app/reports/tests/)
-node --test functions/test/codes.test.js                     # proje kökünde, sunucu kod hesabı
+node --test functions/test/codes.test.js functions/test/checkin.test.js   # proje kökünde, sunucu
 ```
 `node --test` klasör adıyla değil dosya adıyla verilmeli (Node 22 klasörü dosya sanıyor).
+
+Emulator'da uçtan uca deneme (Java gerekir; canlı Firebase'e dokunmaz, Blaze gerekmez; ilk
+seferde `cd functions; npm install`):
+```bash
+firebase emulators:exec --only auth,database,functions "node functions/test/emulator_smoke.js"
+```
+Elle denemek için `firebase emulators:start --only auth,database,functions` → http://127.0.0.1:4000.
+`firebase.json`'daki `database.rules` sayesinde Emulator kuralları dosyadan okur; ama
+`firebase deploy --only database` **canlı kuralları değiştirir** (şimdiye kadar kurallar
+Console'a elle yapıştırılıyordu); bilerek ve kullanıcıya sorarak yapılmalı.
 
 ESP32: `esp32/beacon/config_example.h` → `config.h` kopyala → Arduino IDE →
 `esp32/beacon/beacon.ino` → Board: ESP32 Dev Module → Port: COM9/COM4 → Upload →
@@ -365,7 +390,14 @@ Aşama 2 ile eklenen (mobil uygulama yazar; `{uid}` = Firebase Auth uid):
   taramasında yok: Aşama 3'te sunucu "anahtar yok" derse Kotlin de aynı yenilemeyi yapmalı. Kurallar öğretmene bu iki yerde **sadece silme** izni verir (okuma/yazma yok). Bir
   öğrenciyi silerken üst düğümü değil, altındaki uid'i sil.
 - Cloud Functions (Aşama 3) öğrenciyi uid → `StudentAccounts.studentNo` → `StudentNumbers`
-  zinciriyle doğrulamalı; `StudentSecrets`'ın varlığı tek başına yeterli değil.
+  zinciriyle doğrulamalı; `StudentSecrets`'ın varlığı tek başına yeterli değil (`checkin.js` böyle yapıyor).
+
+Aşama 3 ile eklenen (sadece `checkIn` fonksiyonu / Console; kurallarda okuma-yazma kapalı):
+
+- `RoomSecrets/{derslik}`: `{ key (base64, 32 bayt), createdAt }` — sınıf anahtarı; aynısı o
+  dersliğin ESP32 `config.h`'ında. Console'dan elle eklenir (`new_room_key.ps1`).
+- `CheckInFailures/{uid}/{YYYY-MM-DD}`: o gün (UTC) hatalı kod sayısı; 10'a ulaşınca o gün
+  istekler reddedilir. Eski günler birikir (küçük); istenirse elle silinebilir.
 - Cihaz eşleştirme: bir telefon tek öğrenciye bağlı (Kotlin `bound_uid`), bir hesap tek telefona
   bağlı (`keyCreatedAt`). Çıkış yapmak anahtarı silmez.
 

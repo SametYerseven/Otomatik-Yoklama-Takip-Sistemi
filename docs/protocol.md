@@ -96,14 +96,22 @@ Kotlin (`BeaconApp`), uygulama kapalıyken de çalışır:
 | 2 | Alan türleri: `room` 0–65535 tamsayı, `classCode` 0–65535, `studentCode` 44 karakter, `rssi` tamsayı | `invalid-argument` |
 | 3 | `StudentAccounts/{uid}.studentNo` var ve `StudentNumbers/{no} == uid` | `permission-denied` (`not-student`) |
 | 4 | `StudentSecrets/{uid}` var | `failed-precondition` (`no-key`) |
-| 5 | `RoomSecrets/{room}` ile T-1, T, T+1 için C hesaplanır; biri eşleşir → o dilim `Tm` | `permission-denied` (`class-code`) |
-| 6 | S, `StudentSecrets/{uid}.key` ile hesaplanır ve sabit zamanlı karşılaştırılır | `permission-denied` (`student-code`) |
+| 4a | `RoomSecrets/{room}` var (derslik sisteme tanıtılmış) | `failed-precondition` (`unknown-room`), hatalı deneme sayılmaz |
+| 4b | `CheckInFailures/{uid}/{gün UTC}` < 10 (günlük hatalı deneme sınırı) | `resource-exhausted` (`too-many-failures`) |
+| 5–6 | `RoomSecrets/{room}` ile T-1, T, T+1 için C hesaplanır (eşleşen dilim `Tm`) **ve** S, `StudentSecrets/{uid}.key` ile hesaplanıp sabit zamanlı karşılaştırılır. İkisi de her zaman hesaplanır | `permission-denied` (`bad-code`); sayaç 1 artar |
 | 7 | `System/{room}.status` `ACTIVE` veya `EXIT` (ders sürüyor) | `{ result: "no-session" }`, yazma yok |
 | 8 | `Presence/{room}/{studentNo}.lastSlot >= Tm` ise (aynı/eski dilim) | `{ result: "duplicate" }`, yazma yok |
 
 Hata durumunda sunucu `HttpsError(kod, neden)` döner; parantez içindeki neden
-(`not-student`, `no-key`, `class-code`, `student-code`) hatanın **mesaj** alanına yazılır.
-Telefon `no-key`'i bu mesajdan tanır.
+(`not-student`, `no-key`, `unknown-room`, `too-many-failures`, `bad-code`) hatanın **mesaj**
+alanına yazılır. Telefon `no-key`'i bu mesajdan tanır.
+
+**2026-11-26 değişikliği (Samet, uygulandı: `functions/checkin.js`):** Eski `class-code` ve
+`student-code` nedenleri tek `bad-code` oldu; deneyen kişi sınıf kodunu doğru bilip bilmediğini
+hata mesajından ya da cevap süresinden anlayamaz. Günlük 10 hatalı deneme sınırı eklendi
+(`CheckInFailures`, kuralda okuma/yazma kapalı): sınıf kodunu tahmin etmeye çalışan biri hem
+başarısız olur hem de fonksiyon kotasını tüketemez. Telefon tarafı (`CheckInClient.classifyError`)
+değişmeden uyumlu: `bad-code` → `Rejected`, `resource-exhausted` → `Failed`.
 
 **Yazma** (yalnızca 1–8 geçerse):
 
@@ -123,6 +131,10 @@ Yanıt: `{ result: "ok" }`.
 - Fonksiyon **tetikleyici (trigger) değil**, HTTPS callable. Kendi yazdığı yol onu tekrar
   çağıramaz (CLAUDE.md maliyet kuralı 1).
 - Eski sistemin `mac` alanı artık yazılmaz; panel bu alanı göstermiyor.
+- `maxInstances: 10`: beklenmedik yükte en fazla 10 kopya çalışır, fatura kontrolsüz büyümez.
+- Uygulama: `functions/index.js` (bağlantı) + `functions/checkin.js` (karar mantığı, Firebase'siz).
+  Testler: `functions/test/checkin.test.js` (sahte veritabanı) ve `functions/test/emulator_smoke.js`
+  (Emulator'da gerçek fonksiyon + veritabanı + giriş + kurallar).
 
 ## 7. Panel: "sınıfta" hesabı
 
@@ -160,8 +172,8 @@ Bir ESP32 kaybolur ya da çalınırsa o dersliğin anahtarı yenilenmelidir.
 ## 10. Güvenlik özeti ve bilinen sınırlar
 
 - **Tahmin:** Sınıf dışındaki biri C'yi rastgele denerse tek denemede şansı ~3/65536 (±1 dilim).
-  Dilim başına tek istek kabul edildiği ve %70 katılım için ders boyunca art arda onlarca
-  doğru tahmin gerektiği için pratikte işe yaramaz.
+  Günde en fazla 10 hatalı deneme yapılabildiği için bir günde tek bir doğru tahmin şansı
+  ~%0,05; %70 katılım için ders boyunca art arda onlarca doğru tahmin gerektiğinden pratikte imkânsız.
 - **Tekrar gönderim (replay):** Aynı ya da eski dilim reddedilir (`lastSlot`); başkasının S'si
   kendi girişinle kullanılamaz.
 - **Röle saldırısı (bilinen sınır):** Sınıftaki biri C'yi 30 sn içinde dışarıdaki arkadaşına

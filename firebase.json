@@ -8,5 +8,19 @@
         "headers": [{ "key": "Cache-Control", "value": "no-cache" }]
       }
     ]
+  },
+  "functions": {
+    "source": "functions",
+    "ignore": ["node_modules", "test", ".git", "*.log"]
+  },
+  "database": {
+    "rules": "firebase/database.rules.json"
+  },
+  "emulators": {
+    "auth": { "port": 9099 },
+    "database": { "port": 9000 },
+    "functions": { "port": 5001 },
+    "ui": { "enabled": true, "port": 4000 },
+    "singleProjectMode": true
   }
 }

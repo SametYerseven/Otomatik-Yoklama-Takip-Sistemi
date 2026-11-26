@@ -55,3 +55,8 @@ firebase/backups/
 
 # Firebase CLI yayinlama onbellegi
 .firebase/
+
+# Cloud Functions bagimliliklari ve Emulator kayitlari
+functions/node_modules/
+*-debug.log
+
