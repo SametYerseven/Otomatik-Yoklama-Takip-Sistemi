@@ -99,12 +99,27 @@ const DemoData = {
 // ==========================================================================
 // config.js yoksa (yeni klon) gercek giris calismaz; sayfa yine acilir, giriste uyari verilir
 const CONFIG_MISSING = !DEMO && typeof firebaseConfig === 'undefined';
+// ?emulator=1: canli Firebase yerine bilgisayardaki Firebase Emulator'a baglanir (Asama 3 uctan uca
+// deneme; bkz. functions/test/emulator_demo.js). Sadece localhost'ta calisir, yayindaki sitede yok sayilir.
+const EMULATOR = !DEMO && new URLSearchParams(location.search).has('emulator')
+    && ['localhost', '127.0.0.1'].includes(location.hostname);
 const Store = DEMO ? createDemoStore() : CONFIG_MISSING ? null : createFirebaseStore();
 
 function createFirebaseStore() {
     firebase.initializeApp(firebaseConfig);
     const db = firebase.database();
     const auth = firebase.auth();
+    if (EMULATOR) {
+        db.useEmulator('127.0.0.1', 9000);
+        auth.useEmulator('http://127.0.0.1:9099');
+        document.title = `[EMULATOR] ${document.title}`;
+        document.addEventListener('DOMContentLoaded', () => {
+            const tag = document.createElement('div');
+            tag.textContent = 'EMULATOR: canlı veritabanı değil';
+            tag.style.cssText = 'position:fixed;bottom:36px;right:12px;z-index:9999;background:#d02030;color:#fff;padding:6px 12px;border-radius:8px;font:600 13px sans-serif';
+            document.body.appendChild(tag);
+        });
+    }
     const listeners = [];
     const on = (path, cb) => { const ref = db.ref(path); ref.on('value', (s) => cb(s.exists() ? s.val() : null)); listeners.push(ref); };
 

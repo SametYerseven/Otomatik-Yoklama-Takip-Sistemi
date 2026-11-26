@@ -172,6 +172,8 @@ functions/                   Aşama 3 Cloud Functions (Node.js 22, firebase-func
   test/codes.test.js         protocol.md test vektörleri (node:test, ek paket yok)
   test/checkin.test.js       checkIn mantığı, bellekteki sahte veritabanıyla
   test/emulator_smoke.js     Emulator'da gerçek fonksiyon + DB + Auth + kurallar (telefonu taklit eder)
+  test/emulator_demo.js      Emulator'da canlı gösterim: test öğretmeni + 3 sahte telefon (30 sn'de
+                             bir checkIn; biri 3 dk sonra susar). Test hesap bilgileri dosyada
   node_modules/              git'te yok; `cd functions; npm install` ile kurulur
 web/                         Öğretmen paneli (HTML/JS, Firebase JS SDK v8, SheetJS ile Excel).
                              Açık tema + CBÜ laciverti. Görünümler: Genel Bakış, Derslerim,
@@ -179,6 +181,7 @@ web/                         Öğretmen paneli (HTML/JS, Firebase JS SDK v8, She
                              öğrenci detay penceresi (Cihazı sıfırla).
                              app.js'te tüm DB işlemleri `Store` üzerinden; `?demo=1` ile bellekteki
                              örnek verilerle açılır, Firebase'e bağlanmaz/yazmaz, config.js gerekmez.
+                             `?emulator=1` (sadece localhost) Firebase Emulator'a bağlanır.
                              RFID kaldırıldı (kapsam dışı).
 firebase.json, .firebaserc   Hosting (web/), functions, database (kurallar dosyası) ve Emulator
                              portları (auth 9099, database 9000, functions 5001, ui 4000).
@@ -337,6 +340,16 @@ seferde `cd functions; npm install`):
 firebase emulators:exec --only auth,database,functions "node functions/test/emulator_smoke.js"
 ```
 Elle denemek için `firebase emulators:start --only auth,database,functions` → http://127.0.0.1:4000.
+
+Emulator'da canlı gösterim (ESP32 ve Android olmadan sunucu + panel zinciri; 2026-11-26'da denendi:
+ders başlayınca 3 öğrenci "Sınıfta" göründü):
+1. `firebase emulators:start --only auth,database,functions`
+2. ikinci terminalde `node functions/test/emulator_demo.js` (test öğretmeni giriş bilgisini yazar)
+3. panel yerelde: http://localhost:8000/?emulator=1 → giriş → Derslik 203'te yoklamayı başlat.
+Panelin `?emulator=1` modu sadece localhost'ta çalışır (yayındaki sitede yok sayılır), sağ altta
+kırmızı "EMULATOR" etiketi gösterir. Öğrenci kimlik token'ları 1 saat geçerli; daha uzun
+gösterimde betik yeniden başlatılır. Gerçek telefonla denemek için Kotlin'de
+`FirebaseFunctions/Auth/Database.useEmulator(<bilgisayarın IP'si>, port)` gerekir (Talha).
 `firebase.json`'daki `database.rules` sayesinde Emulator kuralları dosyadan okur; ama
 `firebase deploy --only database` **canlı kuralları değiştirir** (şimdiye kadar kurallar
 Console'a elle yapıştırılıyordu); bilerek ve kullanıcıya sorarak yapılmalı.
