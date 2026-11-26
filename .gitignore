@@ -52,3 +52,6 @@ firebase/backups/
 
 # Word gecici kilit dosyalari
 ~$*
+
+# Firebase CLI yayinlama onbellegi
+.firebase/
