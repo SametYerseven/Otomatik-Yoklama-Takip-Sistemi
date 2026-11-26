@@ -8,6 +8,9 @@
 const DEMO = new URLSearchParams(location.search).has('demo');
 const SAMPLE_MS = DEMO ? 4000 : 20000;   // otomatik yoklama ornekleme araligi
 const PASS_PERCENT = 70;                  // nihai VAR icin gereken katilim yuzdesi
+// Telefon sinifta kaldikca en az 60 sn'de bir checkIn gonderir; sunucu Presence'a lastSeen yazar.
+// Son sinyal bundan eskiyse ogrenci "sinifta degil" sayilir (docs/protocol.md bolum 7).
+const LAST_SEEN_LIMIT_MS = 150 * 1000;
 const SEMESTER_WEEKS = 14;
 const MAX_ABSENCE = 4;                    // 14 haftanin %30'u
 
@@ -69,11 +72,12 @@ const DemoData = {
         '232801116': 'Serkan Taş', '232801123': 'Tuğba Kılıç', '232801130': 'Yusuf Bulut',
     },
     // Canli ders senaryosu: derste gecen ~45 dakikanin ozeti
-    // ratio: katilim orani, state: su anki durum, ml: makine ogrenmesi "sinif ici" tahmini
+    // ratio: katilim orani, state: su anki durum, ml: makine ogrenmesi "sinif ici" tahmini,
+    // phoneOff: kaydi IN_CLASS ama telefonu 4 dk'dir sinyal gondermiyor (lastSeen kurali -> Ayrildi)
     live: {
         '232801011': { ratio: 1.00, state: 'in' }, '232801018': { ratio: 0.98, state: 'in' },
         '232801025': { ratio: 0.95, state: 'in' }, '232801032': { ratio: 1.00, state: 'in' },
-        '232801039': { ratio: 0.62, state: 'in' }, '232801046': { ratio: 0.97, state: 'in' },
+        '232801039': { ratio: 0.62, state: 'in', phoneOff: true }, '232801046': { ratio: 0.97, state: 'in' },
         '232801053': { ratio: 0.38, state: 'left' }, '232801060': { ratio: 0.99, state: 'in' },
         '232801067': { ratio: 0.93, state: 'in', ml: false }, '232801074': { ratio: 0, state: 'absent' },
         '232801081': { ratio: 1.00, state: 'in' }, '232801088': { ratio: 0.88, state: 'in' },
@@ -104,7 +108,14 @@ function createFirebaseStore() {
     const listeners = [];
     const on = (path, cb) => { const ref = db.ref(path); ref.on('value', (s) => cb(s.exists() ? s.val() : null)); listeners.push(ref); };
 
+    // Bilgisayarin saati ile Firebase sunucu saati arasindaki fark (ms). lastSeen sunucu saatiyle
+    // yazildigi icin "kac sn once" hesabi da sunucu saatiyle yapilir; bilgisayarin saati kaymis
+    // olsa bile ogrenciler yanlislikla "yok" gorunmez. (.info herkese acik, kural gerekmez.)
+    let serverOffset = 0;
+    db.ref('.info/serverTimeOffset').on('value', (s) => { serverOffset = s.val() || 0; });
+
     return {
+        serverNow: () => Date.now() + serverOffset,
         async signIn(email, pass) {
             // Sekme kapaninca oturum kapanir (sinif bilgisayari ortak kullanilabilir)
             await auth.setPersistence(firebase.auth.Auth.Persistence.SESSION);
@@ -165,9 +176,21 @@ function createDemoStore() {
     let presenceCb = () => {};
     let ml = {};
     let mlCb = () => {};
+    let heartbeat = null;
     const emitStudents = () => studentCb({ ...students });
 
+    // Demo: sinifta olan telefonlar her 30 sn'de bir checkIn gonderiyormus gibi lastSeen'i
+    // tazeler. Demo verisinde "phoneOff" olan ogrencinin telefonu giristen sonra susmus:
+    // kaydi hala IN_CLASS ama lastSeen eski, panel onu "Ayrildi" gosterir.
+    const sendHeartbeats = () => {
+        for (const [no, p] of Object.entries(presence)) {
+            if (p.status === 'IN_CLASS' && !p.manual && !DemoData.live[no]?.phoneOff) p.lastSeen = Date.now();
+        }
+        presenceCb({ ...presence });
+    };
+
     return {
+        serverNow: () => Date.now(),
         async signIn() { return DemoData.teacher; },
         async signOut() {},
         async classrooms() { return DemoData.classrooms; },
@@ -179,15 +202,22 @@ function createDemoStore() {
             presence = {}; ml = {};
             for (const [no, s] of Object.entries(DemoData.live)) {
                 if (!students[no]) continue;
-                if (s.state === 'in') presence[no] = { status: 'IN_CLASS', rssi: -60 - (Number(no) % 17) };
+                if (s.state === 'in') {
+                    presence[no] = {
+                        status: 'IN_CLASS', rssi: -60 - (Number(no) % 17),
+                        lastSeen: s.phoneOff ? Date.now() - 4 * 60000 : Date.now() - (Number(no) % 50) * 1000,
+                    };
+                }
                 ml[no] = { in_class: s.ml !== false, time: fmtTime(new Date()) };
             }
+            clearInterval(heartbeat);
+            heartbeat = setInterval(sendHeartbeats, 30000);
         },
         onPresence(room, cb) { presenceCb = cb; cb({ ...presence }); },
         onML(room, cb) { mlCb = cb; cb({ ...ml }); },
         async addManual(room, no) { presence[no] = { status: 'IN_CLASS', manual: true }; presenceCb({ ...presence }); },
         async keepOnly(room, kept) { presence = { ...kept }; presenceCb({ ...presence }); },
-        async endSession() { presence = {}; },
+        async endSession() { clearInterval(heartbeat); presence = {}; },
         history(courseCode, no) {
             const missed = DemoData.missedWeeks[no] || [];
             return Array.from({ length: DemoData.weeksHeld }, (_, w) => ({
@@ -507,7 +537,7 @@ $('btn-confirm-start').addEventListener('click', async () => {
     Store.onPresence(state.room, (v) => {
         state.presence = v;
         if (state.lessonStatus === 'CHECKOUT_OPEN') {
-            for (const no in v) if (v[no].status === 'IN_CLASS') state.checkedOut[no] = true;
+            for (const no in v) if (isInClass(no)) state.checkedOut[no] = true;
         }
         render();
     });
@@ -526,14 +556,41 @@ function updateTimer() {
     $('lesson-timer').innerText = `${two(Math.floor(s / 60))}:${two(s % 60)}`;
 }
 
+// Ogrenci su an sinifta mi? (docs/protocol.md bolum 7)
+//   sinifta = status IN_CLASS ve (elle eklendi ya da son sinyal LAST_SEEN_LIMIT_MS'den yeni)
+// Telefonun pili biterse, interneti kesilirse ya da ogrenci cikarsa gonderim durur ve ogrenci
+// 2,5 dk sonra kendiliginden "sinifta degil" olur. lastSeen'i olmayan kayit sinifta sayilmaz.
+function isInClass(no) {
+    const p = state.presence[no];
+    if (!p || p.status !== 'IN_CLASS') return false;
+    if (p.manual) return true;
+    return typeof p.lastSeen === 'number' && Store.serverNow() - p.lastSeen <= LAST_SEEN_LIMIT_MS;
+}
+
+// Son sinyalden bu yana gecen sure (sn); bilinmiyorsa null
+function lastSeenSeconds(no) {
+    const p = state.presence[no];
+    if (!p || typeof p.lastSeen !== 'number') return null;
+    return Math.max(0, Math.round((Store.serverNow() - p.lastSeen) / 1000));
+}
+
+// Ogrenci detayinda sinyal kutusunun altindaki "son sinyal 23 sn once" yazisi
+function lastSeenText(no) {
+    if (state.presence[no]?.manual) return '<span class="muted small">elle eklendi</span>';
+    const s = lastSeenSeconds(no);
+    if (s === null) return '';
+    return `<span class="muted small">son sinyal ${s < 60 ? `${s} sn` : `${Math.floor(s / 60)} dk`} önce</span>`;
+}
+
 // Her SAMPLE_MS'de bir: sinifta olan ogrencinin sayacini artir
 function takeSample() {
-    if (state.lessonStatus !== 'CHECKIN_OPEN') return;
+    // Cikis yoklamasinda sayac artmaz ama sinyali kesilen ogrenci ekranda yine de dusmeli
+    if (state.lessonStatus !== 'CHECKIN_OPEN') { render(); return; }
     state.totalChecks++;
     const now = new Date().toLocaleTimeString('tr-TR');
     for (const no in state.studentPool) {
         const log = state.logs[no] || (state.logs[no] = { presentCount: 0, records: [] });
-        const inClass = state.presence[no] && state.presence[no].status === 'IN_CLASS';
+        const inClass = isInClass(no);
         if (inClass) { log.presentCount++; state.checkedIn[no] = true; }
         log.records.push({ time: now, status: inClass ? 'VAR' : 'YOK' });
     }
@@ -543,7 +600,7 @@ function takeSample() {
 function studentInfo(no) {
     const log = state.logs[no] || { presentCount: 0, records: [] };
     const pct = state.totalChecks === 0 ? 0 : Math.min(100, Math.round((log.presentCount / state.totalChecks) * 100));
-    const inClass = !!(state.presence[no] && state.presence[no].status === 'IN_CLASS');
+    const inClass = isInClass(no);
     const st = inClass ? 'in' : state.checkedIn[no] ? 'left' : 'absent';
     const mlOutside = inClass && state.ml[no] && state.ml[no].in_class === false;
     const minutes = Math.round((log.presentCount * SAMPLE_MS) / 60000 * (DEMO ? 5 : 1));
@@ -626,7 +683,7 @@ $('btn-take-exit').addEventListener('click', async () => {
     for (const no in state.checkedIn) {
         const p = state.presence[no];
         const mlOk = state.ml[no] ? state.ml[no].in_class === true : DEMO;
-        if (p && p.status === 'IN_CLASS' && mlOk) { state.checkedOut[no] = true; kept[no] = p; }
+        if (isInClass(no) && mlOk) { state.checkedOut[no] = true; kept[no] = p; }
     }
     await Store.keepOnly(state.room, kept);
     setStatusBadge();
@@ -669,7 +726,7 @@ function openStudentDetail(no) {
             <div class="detail-stats">
                 <div><span class="muted small">Katılım</span><strong style="color:${pctColor(info.pct)}">%${info.pct}</strong></div>
                 <div><span class="muted small">Sınıfta geçen süre</span><strong>${fmtMinutes(info.minutes)}</strong></div>
-                <div><span class="muted small">Sinyal</span><strong>${state.presence[no]?.rssi ? `${state.presence[no].rssi} dBm` : '–'}</strong></div>
+                <div><span class="muted small">Sinyal</span><strong>${state.presence[no]?.rssi ? `${state.presence[no].rssi} dBm` : '–'}</strong>${lastSeenText(no)}</div>
             </div></div>
             <div><div class="muted small" style="margin-bottom:6px">Son ölçümler (yeşil: sınıfta, kırmızı: değil)</div>
             <div class="timeline">${info.log.records.slice(-40).map((r) => `<span title="${esc(r.time)}" style="background:${r.status === 'VAR' ? 'var(--success)' : '#f2b8be'}"></span>`).join('')}</div></div>`;
@@ -804,7 +861,7 @@ function renderStudentModal() {
         return;
     }
     $('modal-student-list').innerHTML = entries.map(([no, name]) => {
-        const added = state.lessonStatus === 'CHECKOUT_OPEN' ? !!state.checkedOut[no] : !!(state.presence[no] && state.presence[no].status === 'IN_CLASS');
+        const added = state.lessonStatus === 'CHECKOUT_OPEN' ? !!state.checkedOut[no] : isInClass(no);
         return `<tr><td><strong>${esc(no)}</strong></td><td>${esc(name)}</td>
             ${active ? `<td><button class="btn btn-light" data-manual="${esc(no)}" ${added ? 'disabled' : ''}><i class="fa-solid ${added ? 'fa-check' : 'fa-user-plus'}"></i> ${added ? 'Sınıfta' : 'Manuel ekle'}</button></td>` : ''}
             <td style="text-align:right"><button class="btn-icon" data-delete="${esc(no)}" title="Öğrenciyi sil"><i class="fa-solid fa-trash-can"></i></button></td></tr>`;

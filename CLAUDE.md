@@ -42,7 +42,7 @@ derste ne kadar kaldığının takip edilmesi. Bileşenler: ESP32 (sınıfta), F
 |---|---|---|
 | 1 | ESP32 sabit iBeacon + Android arka plan algılama testi | **Tamamlandı**, Galaxy S24 Ultra'da test edildi: uygulama kapalıyken "Sınıfa girdin/çıktın" bildirimleri geliyor |
 | 2 | Öğrenci kaydı, gizli anahtar | **Tamamlandı** (2026-11-18), Galaxy S24 Ultra'da test edildi: kayıt, giriş, çıkış, tekrar giriş, aynı numarayla ikinci kayıt engelleniyor ve uyarı gösteriliyor. `firebase/database.rules.json` Firebase'de yayında |
-| 3 | Dönen sınıf kodu (ESP32), öğrenci kodu (telefon), Cloud Functions doğrulaması, `Presence`'a yazma | **Kodlanıyor** (protokol `docs/protocol.md`, 2026-11-26'da kabul edildi). Adım adım yapılıyor: ✅ Kotlin öğrenci kodu (`AttendanceCode.kt`) ✅ Kotlin `checkIn` istemcisi (`CheckInClient.kt`, henüz taramaya bağlı değil) ✅ sunucu kod hesabı (`functions/codes.js`) — hepsi test vektörleriyle birim testli. ✅ DS3231 saat modülü (Samet, 2026-11-26, `esp32/rtc_test`): ayarlama, reset ve 6–7 dk elektrik kesintisi sonrası saat korunuyor. ✅ ESP32 dönen C (`beacon.ino`, Samet, 2026-11-26): açılışta test vektörleriyle öz-test yapar; kartta test edildi (öz-test TAMAM, art arda 3 dilimde C `codes.js` ile aynı). Sıradaki: `functions/index.js` (`checkIn`, 8 kontrol + `Presence` yazımı, Emulator'da) → `BeaconApp`'e bağlama (60 sn, en güçlü beacon, `no-key` → anahtar yenileme) → panel `lastSeen` → Blaze + deploy (gerçek sınıf anahtarı: `new_room_key.ps1` → `config.h` + `RoomSecrets`) |
+| 3 | Dönen sınıf kodu (ESP32), öğrenci kodu (telefon), Cloud Functions doğrulaması, `Presence`'a yazma | **Kodlanıyor** (protokol `docs/protocol.md`, 2026-11-26'da kabul edildi). Adım adım yapılıyor: ✅ Kotlin öğrenci kodu (`AttendanceCode.kt`) ✅ Kotlin `checkIn` istemcisi (`CheckInClient.kt`, henüz taramaya bağlı değil) ✅ sunucu kod hesabı (`functions/codes.js`) — hepsi test vektörleriyle birim testli. ✅ DS3231 saat modülü (Samet, 2026-11-26, `esp32/rtc_test`): ayarlama, reset ve 6–7 dk elektrik kesintisi sonrası saat korunuyor. ✅ ESP32 dönen C (`beacon.ino`, Samet, 2026-11-26): açılışta test vektörleriyle öz-test yapar; kartta test edildi (öz-test TAMAM, art arda 3 dilimde C `codes.js` ile aynı). Sıradaki: `functions/index.js` (`checkIn`, 8 kontrol + `Presence` yazımı, Emulator'da) → `BeaconApp`'e bağlama (60 sn, en güçlü beacon, `no-key` → anahtar yenileme) → Blaze + deploy. ✅ Panel `lastSeen` kuralı (Samet, 2026-11-26, demo modunda test edildi; `phoneOff` demo öğrencisi 150 sn kuralını gösterir) (gerçek sınıf anahtarı: `new_room_key.ps1` → `config.h` + `RoomSecrets`) |
 | — | iOS (Swift + CoreLocation) | Yapılmadı, Mac gerekiyor |
 | — | Öğretmen paneline Firebase Auth | **Tamamlandı** (2026-11-18): e-posta/şifre girişi, `TeacherAccounts` eşlemesi, sıkı kurallar Firebase'de yayında. Şimdilik iki test hesabı, ikisi de `osman_altay`'a bağlı: Samet'in hesabı ve Talha'nın 2026-11-24'te açtığı test öğretmen hesabı. Gerçek öğretmen hesapları açılınca ikisi de silinmeli (Authentication → Users ve `TeacherAccounts/{uid}`) |
 | — | Öğretmen paneline "Cihazı sıfırla" | **Tamamlandı** (2026-11-24): panelde her zaman açık "Öğrenciler" sekmesi → öğrenci detayı → buton; kurallar Firebase'de yayında. Aynı telefonda sıfırlanırsa uygulama bir sonraki açılışta anahtarı yeniler. Galaxy S24 Ultra'da test edildi: normal açılış, aynı telefonda sıfırlama, uygulamayı silip kurma (sıfırlamasız engelleniyor, sıfırlamayla açılıyor), panel sekmesi |
@@ -326,9 +326,13 @@ kurallardan çıkarıldı.
   (e-posta/şifre) kullanıyor; eski `password` alanı 2026-11-18'de canlıdan silindi.
 - `Classrooms`: dizi, örn. `["203","204","205","Amfi 1","Lab 2"]` (beacon için sayı olmalı)
 - `Students/{studentNo}`: `"Ad Soyad"` (düz string)
-- `Presence/{classroom}/{studentNo}`: `{ status: "IN_CLASS" | "ABSENT" | ..., mac, rssi, manual?, checkInTime, leaveTime }`
-  Panel `status === "IN_CLASS"` olanları "var" sayar; 20 sn'de bir örnekleyip katılım yüzdesi
-  hesaplar; nihai VAR = girişte var + çıkışta var + %70 üzeri.
+- `Presence/{classroom}/{studentNo}`: `{ status: "IN_CLASS", rssi, lastSeen, lastSlot, checkInTime, manual? }`
+  (Aşama 3'te `checkIn` fonksiyonu yazar; eski `mac`/`leaveTime` alanları artık yazılmaz).
+  Panel (`isInClass`) öğrenciyi **`status === "IN_CLASS"` ve (`manual` ya da son `lastSeen`
+  150 sn'den yeni)** ise "var" sayar; süre Firebase sunucu saatiyle (`.info/serverTimeOffset`)
+  hesaplanır, `lastSeen`'i olmayan kayıt sayılmaz. 20 sn'de bir örnekleyip katılım yüzdesi
+  hesaplar; nihai VAR = girişte var + çıkışta var + %70 üzeri. Not: `checkIn` yayına alınana kadar
+  canlıda `lastSeen` yazan yok; sadece öğretmenin elle eklediği öğrenciler "var" görünür.
 - `System/{classroom}`: `{ status: "ACTIVE" | "EXIT", course, rfid_permission, lastReadCard }`
 - `MLPrediction/{classroom}/{studentNo}`: `{ in_class, time }` (live_prediction.py yazar)
 - `RFIDCards/{uid}`: studentNo

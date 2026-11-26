@@ -126,11 +126,14 @@ Yanıt: `{ result: "ok" }`.
 
 ## 7. Panel: "sınıfta" hesabı
 
-Panel şu an `status === "IN_CLASS"` olanları "var" sayıyor. Yeni kural:
+Kural (panelde uygulandı, 2026-11-26, `web/app.js` → `isInClass`):
 
 ```
 sınıfta = status === "IN_CLASS" && (manual === true || şimdi - lastSeen <= 150 sn)
 ```
+
+- "şimdi" **Firebase sunucu saatidir** (`Date.now()` + `.info/serverTimeOffset`); öğretmenin
+  bilgisayar saati kaymış olsa bile sonuç değişmez. `lastSeen`'i olmayan kayıt sınıfta sayılmaz.
 
 - Telefonun pili biterse, internet kesilirse ya da öğrenci çıkarsa gönderim durur; 2,5 dakika
   sonra panel öğrenciyi "sınıfta değil" sayar. Ayrı bir "çıktım" isteği ya da zamanlanmış
