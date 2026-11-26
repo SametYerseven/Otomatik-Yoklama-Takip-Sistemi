@@ -301,8 +301,11 @@ Web paneli: `web/config.js` gerekli. Proje kökünde
 (demo: `/?demo=1`). Ücretsiz planda çalışır. `firebase.json` `web/` klasörünü yayınlar
 (`config_example.js` hariç; html/js/css `no-cache`, güncelleme hemen görünür), `.firebaserc`
 projeyi seçer. `config.js` de yüklenir: içinde sadece web ayarları var, gizli değil (koruma
-giriş + kurallarla). Güncellemek için proje kökünde, `firebase login` yapılmışken:
-`firebase deploy --only hosting`. **Her zaman `--only hosting`:** düz `firebase deploy`,
+giriş + kurallarla). Site bir kez yayınlandı, öyle kalır (bilgisayar kapalıyken de açılır);
+komut **sadece `web/` altındaki dosyalar değiştiğinde** ve değişikliğin sitede de görünmesi
+istendiğinde çalıştırılır, başka zaman gerekmez. Proje kökünde, `firebase login` yapılmışken:
+`firebase deploy --only hosting`. Panel kodu değiştirilip commit edildiğinde kullanıcıya
+"siteyi de güncelleyeyim mi?" diye hatırlatılmalı. **Her zaman `--only hosting`:** düz `firebase deploy`,
 `functions` eklendiğinde fonksiyonları da yüklemeye çalışır (Blaze ister). Samet'in
 bilgisayarında Firebase CLI 15.37 kurulu ve giriş yapılmış.
 
