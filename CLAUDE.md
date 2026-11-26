@@ -167,6 +167,7 @@ web/                         Öğretmen paneli (HTML/JS, Firebase JS SDK v8, She
                              app.js'te tüm DB işlemleri `Store` üzerinden; `?demo=1` ile bellekteki
                              örnek verilerle açılır, Firebase'e bağlanmaz/yazmaz, config.js gerekmez.
                              RFID kaldırıldı (kapsam dışı).
+firebase.json, .firebaserc   Firebase Hosting ayarı (web/ yayınlanır; deploy: --only hosting)
 firebase/database.json       Örnek başlangıç verisi
 firebase/database.rules.json RTDB kuralları (Console → Realtime Database → Kurallar'a elle yapıştırılır)
 ml/ml_pipeline/              Visual Studio çözümü (ml_pipeline.slnx)
@@ -295,6 +296,15 @@ flutter run            # telefon USB ile bağlı olmalı; terminalde r = hot rel
 Web paneli: `web/config.js` gerekli. Proje kökünde
 `python -m http.server 8000 --bind 127.0.0.1 --directory web` → http://localhost:8000
 (`.claude/launch.json`'da `web-panel` olarak da tanımlı). Dosyayı çift tıklayıp `file://` ile açma.
+
+**Yayındaki panel (Firebase Hosting, 2026-11-26):** https://otomatik-yoklama-takip-sistemi.web.app
+(demo: `/?demo=1`). Ücretsiz planda çalışır. `firebase.json` `web/` klasörünü yayınlar
+(`config_example.js` hariç; html/js/css `no-cache`, güncelleme hemen görünür), `.firebaserc`
+projeyi seçer. `config.js` de yüklenir: içinde sadece web ayarları var, gizli değil (koruma
+giriş + kurallarla). Güncellemek için proje kökünde, `firebase login` yapılmışken:
+`firebase deploy --only hosting`. **Her zaman `--only hosting`:** düz `firebase deploy`,
+`functions` eklendiğinde fonksiyonları da yüklemeye çalışır (Blaze ister). Samet'in
+bilgisayarında Firebase CLI 15.37 kurulu ve giriş yapılmış.
 
 Birim testleri:
 ```bash
