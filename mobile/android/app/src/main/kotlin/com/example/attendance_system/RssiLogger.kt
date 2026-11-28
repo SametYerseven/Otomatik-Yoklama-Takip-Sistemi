@@ -23,7 +23,8 @@ import java.util.TimeZone
  * - RSSI: AltBeacon'in Beacon.getRssi() degeri = o turda alinan SON paketin RSSI'si (ham).
  *   Mesafe hesabinda kullanilan ~20 sn'lik ortalama getRunningAverageRssi()'dir; o YAZILMAZ.
  * - Beacon o turda duyulmadiysa satir yazilmaz (iPhone'daki 0 satirlarinin karsiligi).
- * - Dosyalar: <harici uygulama klasoru>/rssi/*.csv; FileProvider ile paylasilir.
+ * - Dosyalar: <harici uygulama klasoru>/rssi klasorundeki .csv dosyalari; FileProvider ile
+ *   paylasilir. (Not: Kotlin'de yorum icinde "/" + "*" yeni bir yorum acar, yazilmamali.)
  */
 object RssiLogger {
 
