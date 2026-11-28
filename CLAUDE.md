@@ -33,8 +33,13 @@ derste ne kadar kaldığının takip edilmesi. Bileşenler: ESP32 (sınıfta), F
 4. **Öğrenci kaydı:** Firebase Authentication, e-posta/şifre.
 5. **Android'de arka plan taraması native Kotlin + AltBeacon ile yapılır**, Flutter sadece ekran.
    Uygulama kapalıyken Flutter motoru çalışmadığı için arka plan işleri (tarama, bildirim,
-   ileride sunucuya gönderim) Kotlin tarafında olmalı. iOS tarafı ileride Swift + CoreLocation
-   ile yazılacak; Dart kodu ve kanal isimleri iki platformda aynı kalacak.
+   ileride sunucuya gönderim) Kotlin tarafında olmalı.
+6. **Sadece Android (danışman kararı, 2026-11-28).** Doç. Dr. Osman Altay: iOS sürümü yapılmayacak,
+   Mac alınmasına gerek yok. iOS'a iş harcanmaz; `ios/` klasörü ve `AppDelegate.swift`'teki
+   derlenmemiş `RssiLogger` olduğu gibi durur (geliştirilmez, test edilmez). Kanal adları
+   platformdan bağımsız kaldığı için ileride iOS eklenebilir. Raporda iOS "kapsam dışı / gelecek
+   çalışma" olarak yazılmalı. Mimari karar 1'deki iOS gerekçesi yine geçerli: ESP32'nin yayın
+   yapması Android'de de bağlantı sınırını kaldırıyor ve ileride iOS'u mümkün kılıyor.
 
 ## Durum
 
@@ -43,7 +48,7 @@ derste ne kadar kaldığının takip edilmesi. Bileşenler: ESP32 (sınıfta), F
 | 1 | ESP32 sabit iBeacon + Android arka plan algılama testi | **Tamamlandı**, Galaxy S24 Ultra'da test edildi: uygulama kapalıyken "Sınıfa girdin/çıktın" bildirimleri geliyor |
 | 2 | Öğrenci kaydı, gizli anahtar | **Tamamlandı** (2026-11-18), Galaxy S24 Ultra'da test edildi: kayıt, giriş, çıkış, tekrar giriş, aynı numarayla ikinci kayıt engelleniyor ve uyarı gösteriliyor. `firebase/database.rules.json` Firebase'de yayında |
 | 3 | Dönen sınıf kodu (ESP32), öğrenci kodu (telefon), Cloud Functions doğrulaması, `Presence`'a yazma | **Kodlanıyor** (protokol `docs/protocol.md`, 2026-11-26'da kabul edildi). Adım adım yapılıyor: ✅ Kotlin öğrenci kodu (`AttendanceCode.kt`) ✅ Kotlin `checkIn` istemcisi (`CheckInClient.kt`, henüz taramaya bağlı değil) ✅ sunucu kod hesabı (`functions/codes.js`) — hepsi test vektörleriyle birim testli. ✅ DS3231 saat modülü (Samet, 2026-11-26, `esp32/rtc_test`): ayarlama, reset ve 6–7 dk elektrik kesintisi sonrası saat korunuyor. ✅ ESP32 dönen C (`beacon.ino`, Samet, 2026-11-26): açılışta test vektörleriyle öz-test yapar; kartta test edildi (öz-test TAMAM, art arda 3 dilimde C `codes.js` ile aynı). ✅ Panel `lastSeen` kuralı (Samet, 2026-11-26, demo modunda test edildi; `phoneOff` demo öğrencisi 150 sn kuralını gösterir). ✅ `checkIn` fonksiyonu (`functions/index.js` + `checkin.js`, Samet, 2026-11-26): 8 kontrol + `Presence` yazımı + günlük 10 hatalı deneme sınırı + tek `bad-code` nedeni; 13 birim testi ve Emulator'da uçtan uca deneme (10/10) geçti; **henüz yayında değil**. Sıradaki: `BeaconApp`'e bağlama (60 sn, en güçlü beacon, `no-key` → anahtar yenileme; Talha) → ESP32 + Android telefon + Emulator ile uçtan uca → Blaze + `firebase deploy --only functions` → kuralları yayınla → gerçek sınıf anahtarı (`new_room_key.ps1` → `config.h` + `RoomSecrets/{derslik}`) |
-| — | iOS (Swift + CoreLocation) | Yapılmadı, Mac gerekiyor |
+| — | iOS (Swift + CoreLocation) | **Kapsam dışı** (danışman kararı 2026-11-28, mimari karar 6) |
 | — | Öğretmen paneline Firebase Auth | **Tamamlandı** (2026-11-18): e-posta/şifre girişi, `TeacherAccounts` eşlemesi, sıkı kurallar Firebase'de yayında. Şimdilik iki test hesabı, ikisi de `osman_altay`'a bağlı: Samet'in hesabı ve Talha'nın 2026-11-24'te açtığı test öğretmen hesabı. Gerçek öğretmen hesapları açılınca ikisi de silinmeli (Authentication → Users ve `TeacherAccounts/{uid}`) |
 | — | Öğretmen paneline "Cihazı sıfırla" | **Tamamlandı** (2026-11-24): panelde her zaman açık "Öğrenciler" sekmesi → öğrenci detayı → buton; kurallar Firebase'de yayında. Aynı telefonda sıfırlanırsa uygulama bir sonraki açılışta anahtarı yeniler. Galaxy S24 Ultra'da test edildi: normal açılış, aynı telefonda sıfırlama, uygulamayı silip kurma (sıfırlamasız engelleniyor, sıfırlamayla açılıyor), panel sekmesi |
 
@@ -51,8 +56,10 @@ derste ne kadar kaldığının takip edilmesi. Bileşenler: ESP32 (sınıfta), F
 Firebase'e bir şey göndermiyor (sadece kayıt/giriş verisi yazıyor). ESP32 de Firebase/Wi-Fi
 kullanmıyor; saati DS3231'den alıyor.
 
-Aşama 3 için bekleyen kararlar: proje Blaze planına geçmeli (ödeme bilgisi; proje ekip
-arkadaşının hesabında). ESP32 saat kaynağı: **DS3231 RTC** (karar verildi, 2026-11-26'da
+Blaze: danışman "gerekmez" dedi ama ekip **Blaze'e geçmeye karar verdi** (2026-11-28); `checkIn`
+fonksiyonunu yayına almak için gerekli. Proje Talha'nın hesabında; ödeme bilgisini ekip girer.
+Geçince: bütçe uyarısı kur → `firebase deploy --only functions` (cleanup policy: evet) →
+kuralları yayınla → gerçek sınıf anahtarı. ESP32 saat kaynağı: **DS3231 RTC** (karar verildi, 2026-11-26'da
 test edildi). Röle saldırısı (sınıftaki birinin kodu 30 sn içinde dışarıya iletmesi) bilinen sınır.
 
 **Cloud Functions maliyet kuralları (Blaze, kullandıkça öde; Aşama 3'te uyulmalı):**
@@ -90,13 +97,14 @@ değiştirilebilir.
    açıkken 5 dk içeride/dışarıda kayıt al, Paylaş ile CSV'yi Samet'e gönder. CSV'de `rssi`
    değerleri satırdan satıra oynuyor mu bak (düz/yumuşaksa AltBeacon ortalama veriyor demektir).
    Adımlar: "Bekleyen işler → İlk ölçüm günü".
-2. **Yarın (2026-11-27):** sınıfta ölçüm; ödünç Mac'le iPhone kurulumu (aynı bölümde).
+2. ~~2026-11-27 ölçümü~~ **yapılamadı** (uygulama derlenmiyordu; Talha 2026-11-28'de `b77f823` ile
+   düzeltti). Yeni ölçüm günü belirlenecek; sadece Android telefonlarla (iOS kapsam dışı).
 3. **Sonra:** `BeaconApp`'i `CheckInClient`'a bağlama (60 sn, en güçlü beacon, `no-key` →
    anahtar yenileme). Sunucu hazır; Emulator'la denemek için Kotlin'de `useEmulator`.
 4. Panelin `?emulator=1`'i ve `emulator_demo.js` ile sunucu + panel zincirini kendi
    bilgisayarında görebilirsin ("Çalıştırma" bölümü).
 
-**Ortak karar bekleyenler:** Blaze (fonksiyonu yayına almak için); ders bazında öğrenci listesi
+**Ortak karar bekleyenler:** Blaze'e geçiş (karar verildi, ödeme ekipte); ders bazında öğrenci listesi
 (şu an derse kayıtlı olmayan ama `Students`'ta olan biri de "var" görünebilir); güncel kuralların
 (`RoomSecrets`, `CheckInFailures`) canlıya yayınlanması; hoca için gerçek öğretmen hesabı.
 
@@ -117,7 +125,7 @@ Aşama 3 `checkIn` işinden bağımsız; hangisi önce yapılacağına kullanıc
   (eğitim ve gerçek kullanım aynı yerde olmalı). `beacon.ino` artık dönen kodlu (Aşama 3); DS3231
   bağlı ve saat ayarlı olmalı, yoksa yayın yapmaz. Minor'ın değişmesi RSSI ölçümünü etkilemez. Telefonlar ESP32'ye bağlanmaz, sadece yayını
   dinler; aynı anda istenen sayıda telefon ölçüm yapabilir.
-- **Telefonlar:** Hem Android hem iPhone, mümkün olduğunca çok ve farklı model (her telefonun
+- **Telefonlar:** Sadece **Android** (iOS kapsam dışı, mimari karar 6), mümkün olduğunca çok ve farklı model (her telefonun
   anteni farklı ölçer; tek modelle eğitilen model başka telefonda yanılır). Tüm telefonlar aynı
   anda, aynı konumlarda ölçer.
 - **Kayıt:** Telefonda **CSV** dosyası (saatte ~0,35 MB), ölçüm sonunda uygulamadaki "Paylaş" ile
@@ -151,7 +159,7 @@ Aşama 3 `checkIn` işinden bağımsız; hangisi önce yapılacağına kullanıc
      "dışarıdakini içeride sanma" oranını yazar, en iyisini `model_phone.pkl`'a kaydeder
      (`--plot`: `rssi_by_location.png`). Eski `model.pkl`'ı ezmez; `live_prediction.py` henüz
      eski modeli okuyor, yeni sisteme geçince `model_phone.pkl`'a uyarlanmalı.
-- **iPhone:** iOS iBeacon'u normal Bluetooth taramasından gizler; RSSI sadece CoreLocation ile
+- **iPhone (KAPSAM DIŞI, 2026-11-28 danışman kararı; aşağısı sadece kayıt için):** iOS iBeacon'u normal Bluetooth taramasından gizler; RSSI sadece CoreLocation ile
   (UUID önceden verilerek) alınır, bu yüzden kendi uygulamamız şart (hazır tarayıcı uygulamalar
   işe yaramaz). Swift tarafı **yazıldı** (2026-11-26, DERLENMEDİ): `ios/Runner/AppDelegate.swift`
   içindeki `RssiLogger` sınıfı (yeni .swift dosyası `project.pbxproj`'a eklenmeden derlenmediği için
@@ -170,7 +178,7 @@ Aşama 3 `checkIn` işinden bağımsız; hangisi önce yapılacağına kullanıc
   gereken yer **sınır**: kapı yanı sıra (içeride) ile kapının hemen önü (dışarıda). Her konumda
   telefonun yeri (el/cep/çanta/masa), sınıf boş/dolu, farklı gün/saat değiştirilmeli. Konum
   başına telefon başına en az 2–3 dk (~150 ölçüm); ilk model için toplam 1–2 saat yeterli.
-- **İlk ölçüm günü: 2026-11-27, sınıfta (Samet + Talha).** Sıra:
+- **İlk ölçüm günü (2026-11-27'de YAPILAMADI, yeni tarih belirlenecek; sadece Android).** Sıra:
   1. *Önceki gece (Talha):* `flutter run` ile Android'e kur; giriş ekranındaki "Veri toplama modu"nu
      aç, izinleri ver, evde ESP32 açıkken 5 dk içeride/dışarıda kayıt, Paylaş ile CSV'yi al,
      Samet'e gönder (Samet `train.py` ile format kontrolü yapar). Derleme hatası varsa düzelt.
@@ -185,7 +193,7 @@ Aşama 3 `checkIn` işinden bağımsız; hangisi önce yapılacağına kullanıc
   5. *Sonra:* her telefondan "Tümünü paylaş" → bilgisayarda
      `ml/ml_pipeline/ml_pipeline/data/` klasörüne → orada `python train.py --split phone --plot`
      (tek gün olduğu için test telefonlar arasında; ikinci bir gün ölçümü modeli güvenilir yapar).
-- **Ödünç Mac ile iPhone ölçümü (2026-11-27, ilk kez denenecek):** Android ölçümü Mac'i beklememeli.
+- **Ödünç Mac ile iPhone ölçümü — İPTAL (iOS kapsam dışı, 2026-11-28).** Adımlar sadece kayıt için duruyor:
   Mac'te gerekenler: Xcode (App Store, ~10+ GB, mümkünse önceden indirilmeli; ilk açılışta iOS
   platformu indirilir), Flutter SDK, CocoaPods. `cd mobile && flutter pub get && cd ios && pod install`
   (Firebase pod'ları için `ios/Podfile`'da `platform :ios, '15.0'` olmalı). Xcode'da
@@ -287,7 +295,7 @@ eklerken `esp32/<ad>/<ad>.ino` düzenini koru.
 | ESP32 yayın aralığı | 100 ms (`0xA0`) |
 | Firebase proje ID | `otomatik-yoklama-takip-sistemi` |
 | RTDB URL | `https://otomatik-yoklama-takip-sistemi-default-rtdb.europe-west1.firebasedatabase.app/` |
-| Cloud Functions bölgesi | `europe-west1` (planlanan); fonksiyon: callable `checkIn` (taslak) |
+| Cloud Functions bölgesi | `europe-west1`; fonksiyon: callable `checkIn` (yazıldı, Blaze'e geçince yayınlanacak) |
 | Android paket adı | `com.example.attendance_system` (Dart paket adı `attendance_system`) |
 | Flutter kanalları | `attendance/beacon` (MethodChannel), `attendance/beacon_events` (EventChannel), `attendance/student_key` (MethodChannel: status, createKey, deleteKey), `attendance/rssi_logger` (MethodChannel: start, stop, status, files, delete, share; Android + iOS) |
 
@@ -347,7 +355,7 @@ eklerken `esp32/<ad>/<ad>.ino` düzenini koru.
 - Yeni grafik/görsel paketi eklenmedi (compileSdk riski); grafikler CustomPainter / CSS ile.
 - `.gitignore`'daki genel `*.png` kuralı `ml/**/*.png` yapıldı; eskiden uygulama simgeleri
   hiç commit edilmediği için yeni klonda Android derlemesi "ic_launcher not found" veriyordu.
-- iOS'ta katılım süresi: bölge izleme sınıfa girişte uygulamayı uyandırır, ders süresince arka
+- (iOS kapsam dışı, 2026-11-28; kayıt için) iOS'ta katılım süresi: bölge izleme sınıfa girişte uygulamayı uyandırır, ders süresince arka
   plan konum oturumu (düşük hassasiyet) açılarak ranging sürdürülür, çıkışta kapatılır; oturum
   kesilirse giriş-çıkış zamanından yedek hesap (karar 2026-11-22, Mac ile denenmedi).
 
