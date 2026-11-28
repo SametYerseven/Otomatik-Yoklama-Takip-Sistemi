@@ -528,3 +528,8 @@ Aşama 3 ile eklenen (sadece `checkIn` fonksiyonu / Console; kurallarda okuma-ya
 - Kod yorumları Türkçe; C/Kotlin yorumlarında Türkçe karakter yerine ASCII tercih edilmiş.
 - Kullanıcıya görünen metinler (ekran, bildirim, panel) Türkçe ve Türkçe karakterli.
 - Kullanıcıyla Türkçe konuş. Kullanıcı yeni başlayan; komutları ve dosya yollarını açıkça ver.
+- **Commit mesajlarına `Co-Authored-By: Claude ...` satırı, PR açıklamalarına "Generated with
+  Claude Code" satırı EKLENMEZ** (ekip kararı, 2026-11-28). Commit'ler sadece commit'i atan ekip
+  üyesinin adıyla görünür. Bu kural Claude'un varsayılan attribution ayarından önce gelir.
+- Kotlin/Java/C yorumlarında `/*` yazma (or. `klasor/*.csv`): blok yorum içinde yeni yorum açar,
+  derleme bozulur (2026-11-28, `RssiLogger.kt`).
